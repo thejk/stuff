@@ -534,8 +534,13 @@ public:
     }
 
     bool bind(unique_stmt& stmt, int index, const std::vector<char>& blob) {
+#if SQLITE_VERSION_NUMBER >= 3080700
         return sqlite3_bind_blob64(stmt.get(), index, blob.data(),
                                    blob.size(), SQLITE_STATIC) == SQLITE_OK;
+#else
+        return sqlite3_bind_blob(stmt.get(), index, blob.data(),
+                                 blob.size(), SQLITE_STATIC) == SQLITE_OK;
+#endif
     }
 
     bool bind(unique_stmt& stmt, const Condition& condition, int* index) {
