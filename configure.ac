@@ -59,7 +59,20 @@ AC_SUBST([DEFINES])
 # 3.6.5 so that sqlite3_changes() return correct values for DELETE
 PKG_CHECK_MODULES([SQLITE3],[sqlite3 >= 3.6.5])
 
+# FastCGI
+
+have_fastcgi=1
+AC_CHECK_HEADER([fcgiapp.h],[],[have_fastcgi=0])
+AC_CHECK_LIB([fcgi],[FCGX_Accept],[],[have_fastcgi=0],[-lfcgi++])
+if test "x$have_fastcgi" = "x1"; then
+  FASTCGI_CFLAGS=
+  FASTCGI_LIBS="-lfcgi++ -lfcgi"
+fi
+AC_SUBST(FASTCGI_CFLAGS)
+AC_SUBST(FASTCGI_LIBS)
+AC_DEFINE_UNQUOTED([HAVE_FASTCGI],[$have_fastcgi],[define to 1 if FastCGI is available])
+
 # Finish up
 
 AC_CONFIG_HEADERS([src/config.h])
-AC_OUTPUT([Makefile src/Makefile])
+AC_OUTPUT([Makefile src/Makefile test/Makefile])

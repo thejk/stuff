@@ -1,0 +1,5 @@
+/test-*.log
+/*.trs
+/test-header-parser
+/test-multipart-formdata-parser
+/test-query-parser
