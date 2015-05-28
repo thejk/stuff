@@ -5,6 +5,7 @@
 #include <fcgio.h>
 #endif
 #include <iostream>
+#include <memory>
 
 #include "cgi.hh"
 #include "header_parser.hh"
