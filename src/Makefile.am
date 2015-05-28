@@ -2,7 +2,11 @@ MAINTAINERCLEANFILES = Makefile.in
 
 AM_CPPFLAGS = @DEFINES@
 
+bin_PROGRAMS = signup
 noinst_LTLIBRARIES = libdb.la libcgi.la
+
+signup_SOURCES = signup.cc common.hh cgi.hh db.hh
+signup_LDADD = libdb.la libcgi.la
 
 libcgi_la_SOURCES = cgi.hh common.hh cgi.cc \
 					query_parser.hh query_parser.cc \
