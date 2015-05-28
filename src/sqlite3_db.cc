@@ -191,7 +191,7 @@ public:
         void set(const std::string& name, const void* data,
                  size_t size) override {
             if (!data) {
-                set(name, nullptr);
+                set_null(name);
                 blob_.erase(name);
             } else {
                 auto ptr = reinterpret_cast<const char*>(data);
