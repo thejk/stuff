@@ -8,6 +8,7 @@ namespace {
 
 bool read_token(std::string::const_iterator* begin,
                 const std::string::const_iterator& end,
+                bool to_lower,
                 std::string* out) {
     auto i = *begin;
     if (i == end) return false;
@@ -15,12 +16,13 @@ bool read_token(std::string::const_iterator* begin,
     out->clear();
     do {
         if ((*i >= '^' && *i <= 'z') ||
+            (!to_lower && *i >= 'A' && *i <= 'Z') ||
             (*i >= '0' && *i <= '9') ||
             (*i >= '#' && *i <= '\'') ||
             *i == '!' || *i == '*' || *i == '+' || *i == '-' || *i == '.' ||
             *i == '|' || *i == '~') {
             ++i;
-        } else if (*i >= 'A' && *i <= 'Z') {
+        } else if (to_lower && *i >= 'A' && *i <= 'Z') {
             out->insert(out->end(), last, i);
             out->push_back('a' + *i - 'A');
             last = ++i;
@@ -73,13 +75,13 @@ bool HeaderParser::parse(const std::string& in, std::string* token,
                          std::map<std::string, std::string>* parameters) {
     auto i = in.begin();
     while (i != in.end() && (*i == ' ' || *i == '\t')) ++i;
-    if (!read_token(&i, in.end(), token)) return false;
+    if (!read_token(&i, in.end(), true, token)) return false;
     while (true) {
         if (i == in.end() || *i != '/') break;
         std::string tmp;
         token->push_back('/');
         ++i;
-        if (!read_token(&i, in.end(), &tmp)) return false;
+        if (!read_token(&i, in.end(), true, &tmp)) return false;
         token->append(tmp);
     }
     if (parameters) parameters->clear();
@@ -91,13 +93,13 @@ bool HeaderParser::parse(const std::string& in, std::string* token,
         while (i != in.end() && (*i == ' ' || *i == '\t')) ++i;
         if (i == in.end()) return false;
         std::string key, value;
-        if (!read_token(&i, in.end(), &key)) return false;
+        if (!read_token(&i, in.end(), true, &key)) return false;
         if (i == in.end() || *i != '=') return false;
         ++i;
         if (i != in.end() && *i == '"') {
             if (!read_quoted(&i, in.end(), &value)) return false;
         } else {
-            if (!read_token(&i, in.end(), &value)) return false;
+            if (!read_token(&i, in.end(), false, &value)) return false;
         }
         if (parameters) (*parameters)[key] = value;
     }

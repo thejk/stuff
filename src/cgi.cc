@@ -4,7 +4,6 @@
 #if HAVE_FASTCGI
 #include <fcgio.h>
 #endif
-#include <iostream>
 #include <memory>
 
 #include "cgi.hh"
@@ -76,11 +75,11 @@ public:
         auto p = getparam("REQUEST_METHOD");
         if (p) {
             auto method = ascii_tolower(p);
-            if (method.compare("GET") == 0) return GET;
-            if (method.compare("POST") == 0) return POST;
-            if (method.compare("HEAD") == 0) return HEAD;
-            if (method.compare("PUT") == 0) return PUT;
-            if (method.compare("TRACE") == 0) return TRACE;
+            if (method.compare("get") == 0) return GET;
+            if (method.compare("post") == 0) return POST;
+            if (method.compare("head") == 0) return HEAD;
+            if (method.compare("put") == 0) return PUT;
+            if (method.compare("trace") == 0) return TRACE;
         }
         return UNKNOWN;
     }
@@ -91,6 +90,10 @@ public:
     }
 
 protected:
+    CGIImpl()
+        : have_post_data_(false) {
+    }
+
     virtual const char* getparam(const char* name) = 0;
 
 private:

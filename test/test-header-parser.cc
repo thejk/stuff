@@ -66,7 +66,7 @@ int main() {
     tot++; if (test("text/html;charset=utf-8",
                     "text/html", "charset", "utf-8", NULL)) ok++;
     tot++; if (test("text/html;charset=UTF-8",
-                    "text/html", "charset", "utf-8", NULL)) ok++;
+                    "text/html", "charset", "UTF-8", NULL)) ok++;
     tot++; if (test("Text/HTML;Charset=\"utf-8\"",
                     "text/html", "charset", "utf-8", NULL)) ok++;
     tot++; if (test("text/html; charset=\"utf-8\"",
