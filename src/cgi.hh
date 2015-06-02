@@ -24,6 +24,8 @@ public:
     // Return true if post data is multipart, false otherwise
     virtual bool post_data(std::map<std::string,std::string>* data) = 0;
     virtual void query_data(std::map<std::string,std::string>* data) = 0;
+    // Will first try post_data and fallback to query_data
+    void get_data(std::map<std::string,std::string>* data);
     virtual std::string request_path() = 0;
     virtual request_type request_type() = 0;
     virtual std::string content_type() = 0;

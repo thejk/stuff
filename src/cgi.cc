@@ -173,6 +173,12 @@ private:
 
 }  // namespace
 
+void CGI::get_data(std::map<std::string,std::string>* data) {
+    if (post_data(data)) return;
+    query_data(data);
+}
+
+
 int CGI::run(std::function<bool(CGI*)> handle_request) {
 #if HAVE_FASTCGI
     if (!FCGX_IsCGI()) {
