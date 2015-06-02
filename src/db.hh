@@ -252,6 +252,10 @@ public:
             : mode_(COMP_BINARY), c_(c), v_(v) {
             op_.comp_binary = op;
         }
+        Condition(const std::string& name, BinaryOperator op, const Value& v)
+            : mode_(COMP_BINARY), c_(Column(name)), v_(v) {
+            op_.comp_binary = op;
+        }
         Condition(UnaryOperator op, const Column& c)
             : mode_(COMP_UNARY), c_(c) {
             op_.comp_unary = op;
@@ -340,6 +344,50 @@ public:
         bool ascending_;
     };
 
+    class Transaction {
+    public:
+        Transaction(std::shared_ptr<DB> db)
+            : db_(db), ptr_(db.get()) {
+            start();
+        }
+        Transaction(DB* db)
+            : ptr_(db) {
+            start();
+        }
+        ~Transaction() {
+            rollback();
+        }
+        bool rollback() {
+            if (ptr_ && good_) {
+                good_ = ptr_->rollback_transaction();
+                db_.reset();
+                ptr_ = nullptr;
+            }
+            return good_;
+        }
+        bool commit() {
+            if (ptr_ && good_) {
+                good_ = ptr_->commit_transaction();
+                if (!good_) {
+                    ptr_->rollback_transaction();
+                }
+                db_.reset();
+                ptr_ = nullptr;
+            }
+            return good_;
+        }
+    private:
+        Transaction(const Transaction&) = delete;
+        Transaction& operator=(const Transaction&) = delete;
+        void start() {
+            good_ = ptr_ && ptr_->start_transaction();
+        }
+
+        std::shared_ptr<DB> db_;
+        DB* ptr_;
+        bool good_;
+    };
+
     // Create a table with the given declarations.
     // If a table with that name already exists nothing happens.
     // Returns false in case of error
@@ -362,6 +410,11 @@ public:
     virtual std::shared_ptr<Snapshot> select(
             const std::string& table, const Condition& condition = Condition(),
             const std::vector<OrderBy>& order_by = std::vector<OrderBy>()) = 0;
+    std::shared_ptr<Snapshot> select(
+            const std::string& table, const OrderBy& order_by);
+    std::shared_ptr<Snapshot> select(
+            const std::string& table, const Condition& condition,
+            const OrderBy& order_by);
     // Remove all rows matching condition in table. Returns number of rows
     // removed or -1 in case of error
     virtual int64_t remove(const std::string& table,

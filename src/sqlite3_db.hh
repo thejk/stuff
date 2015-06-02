@@ -3,13 +3,14 @@
 
 #include "db.hh"
 
+#include <memory>
 #include <string>
 
 namespace stuff {
 
 class SQLite3 {
 public:
-    static DB* open(const std::string& path);
+    static std::unique_ptr<DB> open(const std::string& path);
 };
 
 }  // namespace stuff

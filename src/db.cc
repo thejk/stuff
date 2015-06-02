@@ -57,4 +57,17 @@ double DB::Value::d() const {
     return data_.d;
 }
 
+std::shared_ptr<DB::Snapshot> DB::select(
+        const std::string& table, const OrderBy& order_by) {
+    std::vector<OrderBy> order_by_vector(1, order_by);
+    return select(table, Condition(), order_by_vector);
+}
+
+std::shared_ptr<DB::Snapshot> DB::select(
+        const std::string& table, const Condition& condition,
+        const OrderBy& order_by) {
+    std::vector<OrderBy> order_by_vector(1, order_by);
+    return select(table, condition, order_by_vector);
+}
+
 }  // namespace stuff

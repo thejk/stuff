@@ -712,10 +712,10 @@ public:
 }  // namespace
 
 // static
-DB* SQLite3::open(const std::string& path) {
-    std::unique_ptr<DBImpl> db(new DBImpl());
-    db->open(path);
-    return db.release();
+std::unique_ptr<DB> SQLite3::open(const std::string& path) {
+    std::unique_ptr<DB> db(new DBImpl());
+    static_cast<DBImpl*>(db.get())->open(path);
+    return db;
 }
 
 }  // namespace stuff
