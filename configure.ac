@@ -10,7 +10,8 @@ AM_PROG_CC_C_O
 AC_LANG([C++])
 
 DEFINES=
-AX_APPEND_COMPILE_FLAGS([-fno-rtti -fno-exceptions],DEFINES)
+#-fno-exceptions
+AX_APPEND_COMPILE_FLAGS([-fno-rtti],DEFINES)
 
 # Test c++11
 OLDCXXFLAGS="$CXXFLAGS"
