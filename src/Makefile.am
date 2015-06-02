@@ -12,6 +12,7 @@ libcgi_la_SOURCES = cgi.hh common.hh cgi.cc \
 					query_parser.hh query_parser.cc \
 					header_parser.hh header_parser.cc \
 					strutils.hh strutils.cc \
+					args.hh args.cc \
 				    multipart_formdata_parser.hh multipart_formdata_parser.cc
 libcgi_la_CPPFLAGS = $(AM_CPPFLAGS) @FASTCGI_CFLAGS@
 libcgi_la_LIBADD = @FASTCGI_LIBS@
