@@ -2,7 +2,6 @@
 #define EVENT_HH
 
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -12,7 +11,21 @@ class DB;
 
 class Event {
 public:
+    struct Going {
+        std::string name;
+        bool is_going;
+        std::string note;
+        time_t added;
+
+        Going(const std::string& name, bool is_going, const std::string& note,
+              time_t added)
+            : name(name), is_going(is_going), note(note), added(added) {
+        }
+    };
+
     virtual ~Event() {}
+
+    virtual int64_t id() const = 0;
 
     virtual const std::string& name() const = 0;
     virtual void set_name(const std::string& name) = 0;
@@ -23,11 +36,11 @@ public:
     virtual time_t start() const = 0;
     virtual void set_start(time_t start) = 0;
 
-    virtual void going(std::set<std::string>* going,
-                       std::set<std::string>* not_going) const = 0;
+    virtual void going(std::vector<Going>* going) const = 0;
     virtual bool is_going(const std::string& name) const = 0;
 
-    virtual void update_going(const std::string& name, bool going) = 0;
+    virtual void update_going(const std::string& name, bool is_going,
+                              const std::string& note = std::string()) = 0;
 
     virtual bool store() = 0;
 

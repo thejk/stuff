@@ -15,6 +15,10 @@ public:
     ~EventImpl() override {
     }
 
+    int64_t id() const override {
+        return id_;
+    }
+
     const std::string& name() const override {
         return name_;
     }
@@ -45,44 +49,41 @@ public:
         start_ = start;
     }
 
-    void going(std::set<std::string>* going,
-               std::set<std::string>* not_going) const override {
-        if (going) {
-            going->clear();
-            going->insert(going_.begin(), going_.end());
-        }
-        if (not_going) {
-            not_going->clear();
-            not_going->insert(not_going_.begin(), not_going_.end());
-        }
+    void going(std::vector<Going>* going) const override {
+        going->assign(going_.begin(), going_.end());
     }
 
     bool is_going(const std::string& name) const override {
-        return going_.count(name) > 0;
-    }
-
-    void update_going(const std::string& name, bool going) override {
-        auto it = going_.find(name);
-        if (it != going_.end()) {
-            if (going) return;
-            going_.erase(it);
-            not_going_.insert(name);
-            going_uptodate_ = false;
-        } else {
-            it = not_going_.find(name);
-            if (it != not_going_.end()) {
-                if (!going) return;
-                going_.insert(name);
-                not_going_.erase(it);
-                going_uptodate_ = false;
-            } else {
-                if (going) {
-                    going_.insert(name);
-                } else {
-                    not_going_.insert(name);
-                }
+        for (const auto& going : going_) {
+            if (going.name == name) {
+                return going.is_going;
             }
         }
+        return false;
+    }
+
+    void update_going(const std::string& name, bool is_going,
+                      const std::string& note) override {
+        for (auto it = going_.begin(); it != going_.end(); ++it) {
+            if (it->name == name) {
+                if (it->is_going == is_going && it->note == note) {
+                    return;
+                }
+                going_.erase(it);
+                break;
+            }
+        }
+        std::vector<Going>::iterator it;
+        if (is_going) {
+            for (it = going_.begin(); it != going_.end(); ++it) {
+                if (!it->is_going) {
+                    break;
+                }
+            }
+        } else {
+            it = going_.end();
+        }
+        going_.emplace(it, name, is_going, note, time(NULL));
         going_uptodate_ = false;
     }
 
@@ -110,11 +111,10 @@ public:
     bool remove() override {
         if (new_) return true;
         DB::Transaction transaction(db_);
-        if (!db_->remove(kEventTable,
-                         DB::Condition("id", DB::Condition::EQUAL, id_)))
-            return false;
-        if (!db_->remove(kEventGoingTable,
-                         DB::Condition("event", DB::Condition::EQUAL, id_)))
+        if (db_->remove(kEventTable,
+                        DB::Condition("id", DB::Condition::EQUAL, id_)) < 0 ||
+            db_->remove(kEventGoingTable,
+                        DB::Condition("event", DB::Condition::EQUAL, id_)) < 0)
             return false;
         if (transaction.commit()) {
             new_ = true;
@@ -156,52 +156,55 @@ private:
         }
     }
 
-    bool store_going(const std::set<std::string>& names, bool going) const {
-        for (const auto& name : names) {
+    bool store_going() {
+        if (going_uptodate_) return true;
+        DB::Transaction transaction(db_);
+        if (db_->remove(kEventGoingTable,
+                        DB::Condition("event", DB::Condition::EQUAL, id_)) < 0)
+            return false;
+        for (const auto& going : going_) {
             auto editor = db_->insert(kEventGoingTable);
             editor->set("event", id_);
-            editor->set("name", name);
-            editor->set("going", going);
+            editor->set("name", going.name);
+            editor->set("is_going", going.is_going);
+            editor->set("note", going.note);
+            editor->set("added", static_cast<int64_t>(going.added));
             if (!editor->commit()) {
                 return false;
             }
         }
-        return true;
-    }
-
-    bool store_going() {
-        if (going_uptodate_) return true;
-        DB::Transaction transaction(db_);
-        if (!db_->remove(kEventGoingTable,
-                         DB::Condition("event", DB::Condition::EQUAL, id_)))
-            return false;
-        if (!store_going(going_, true) || !store_going(not_going_, false))
-            return false;
         if (transaction.commit()) {
             going_uptodate_ = true;
             return true;
         }
         return false;
     }
+
     bool load_going() {
         going_.clear();
-        not_going_.clear();
         going_uptodate_ = true;
+        std::vector<DB::OrderBy> order_by;
+        order_by.push_back(DB::OrderBy("is_going", false));
+        order_by.push_back(DB::OrderBy("added"));
+        order_by.push_back(DB::OrderBy("name"));
         auto snapshot = db_->select(kEventGoingTable,
                                     DB::Condition("event",
                                                   DB::Condition::EQUAL,
-                                                  id_));
+                                                  id_),
+                                    order_by);
         if (!snapshot) return true;
         do {
-            bool is_going;
             std::string name;
-            if (!snapshot->get(0, &name) || !snapshot->get(1, &is_going))
+            bool is_going;
+            std::string note;
+            int64_t added;
+            if (!snapshot->get(0, &name) || !snapshot->get(1, &is_going) ||
+                !snapshot->get(3, &added))
                 return false;
-            if (is_going) {
-                going_.insert(name);
-            } else {
-                not_going_.insert(name);
-            }
+            if (!snapshot->get(2, &note))
+                note = "";
+            going_.emplace_back(name, is_going, note,
+                                static_cast<time_t>(added));
         } while (snapshot->next());
         return !snapshot->bad();
     }
@@ -214,9 +217,15 @@ private:
     time_t start_;
     bool new_;
     bool going_uptodate_;
-    std::set<std::string> going_;
-    std::set<std::string> not_going_;
+    std::vector<Going> going_;
 };
+
+std::shared_ptr<DB::Snapshot> open(std::shared_ptr<DB> db) {
+    std::vector<DB::OrderBy> order_by;
+    order_by.push_back(DB::OrderBy("start"));
+    order_by.push_back(DB::OrderBy("name"));
+    return db->select(kEventTable, DB::Condition(), order_by);
+}
 
 }  // namespace
 
@@ -231,14 +240,15 @@ bool Event::setup(DB* db) {
     decl.clear();
     decl.push_back(std::make_pair("event", DB::NotNull(DB::Type::INT64)));
     decl.push_back(std::make_pair("name", DB::NotNull(DB::Type::STRING)));
-    decl.push_back(std::make_pair("going", DB::NotNull(DB::Type::BOOL)));
+    decl.push_back(std::make_pair("is_going", DB::NotNull(DB::Type::BOOL)));
+    decl.push_back(std::make_pair("note", DB::Type::STRING));
+    decl.push_back(std::make_pair("added", DB::NotNull(DB::Type::INT64)));
     return db->insert_table(kEventGoingTable, decl);
 }
 
 // static
 std::unique_ptr<Event> Event::next(std::shared_ptr<DB> db) {
-    auto snapshot =
-        db->select(kEventTable, DB::Condition(), DB::OrderBy("start"));
+    auto snapshot = open(db);
     if (snapshot) {
         do {
             auto ev = new EventImpl(db);
@@ -253,8 +263,7 @@ std::unique_ptr<Event> Event::next(std::shared_ptr<DB> db) {
 
 // static
 std::vector<std::unique_ptr<Event>> Event::all(std::shared_ptr<DB> db) {
-    auto snapshot =
-        db->select(kEventTable, DB::Condition(), DB::OrderBy("start"));
+    auto snapshot = open(db);
     std::vector<std::unique_ptr<Event>> ret;
     if (snapshot) {
         do {
