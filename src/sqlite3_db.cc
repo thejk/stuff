@@ -321,7 +321,8 @@ public:
 
     class SnapshotImpl : public Snapshot {
     public:
-        SnapshotImpl(unique_stmt& stmt) {
+        SnapshotImpl(unique_stmt& stmt)
+            : bad_(false) {
             stmt_.swap(stmt);
         }
         bool get(const std::string& name, std::string* value) override {
@@ -438,6 +439,7 @@ public:
                 case SQLITE_ROW:
                     return true;
                 default:
+                    bad_ = true;
                     stmt_.reset();
                     return false;
                 }
@@ -445,7 +447,7 @@ public:
         }
 
         bool bad() override {
-            return !stmt_;
+            return bad_;
         }
 
     private:
@@ -469,6 +471,7 @@ public:
 #endif
 
         unique_stmt stmt_;
+        bool bad_;
     };
 
     std::string compile(const Condition& condition) {
