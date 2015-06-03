@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -178,11 +179,11 @@ bool create(const std::string& channel,
         Http::response(200, "Unable to store event");
         return true;
     }
+    Http::response(200, "Event created");
     auto next_event = Event::next(db);
     if (next_event->id() == event->id()) {
         signal_event(next_event);
     }
-    Http::response(200, "Event created");
     return true;
 }
 
@@ -259,9 +260,91 @@ bool cancel(const std::string& channel,
 
 bool update(const std::string& channel,
             std::map<std::string, std::string>& data) {
+    std::set<std::string> update;
+    update.insert("name");
+    update.insert("start");
+    update.insert("text");
     std::vector<std::string> args;
     if (!parse(data["text"], &args)) return true;
-    
+    if (args.empty()) {
+        Http::response(200, "Usage: /update [INDEX] [name NAME] [start START] [text TEXT]");
+        return true;
+    }
+    auto db = open(channel);
+    if (!db) return true;
+    std::unique_ptr<Event> event;
+    auto it = args.begin();
+    if (update.count(*it) == 0) {
+        std::vector<unsigned long> indexes;
+        if (!append_indexes(args.begin(), ++it, &indexes)) {
+            return true;
+        }
+        auto events = Event::all(db);
+        if (indexes.front() >= events.size()) {
+            std::ostringstream ss;
+            ss << "No such event: " << indexes.front() << std::endl;
+            Http::response(200, ss.str());
+            return true;
+        }
+        event.swap(events[indexes.front()]);
+        ++it;
+    } else {
+        event = Event::next(db);
+        if (!event) {
+            Http::response(200, "No event to update");
+            return true;
+        }
+    }
+    auto first_event = Event::next(db)->id();
+    while (it != args.end()) {
+        if (*it == "name") {
+            if (++it == args.end()) {
+                Http::response(200, "Missing argument to name");
+                return true;
+            }
+            event->set_name(*it);
+            ++it;
+        } else if (*it == "start") {
+            if (++it == args.end()) {
+                Http::response(200, "Missing argument to start");
+                return true;
+            }
+            std::string text(*it);
+            for (++it; it != args.end() && update.count(*it) == 0; ++it) {
+                text.push_back(' ');
+                text.append(*it);
+            }
+            time_t time;
+            if (!parse_time(text, &time)) {
+                Http::response(200, "Bad argument to start: " + text);
+                return true;
+            }
+            event->set_start(time);
+        } else if (*it == "text") {
+            if (++it == args.end()) {
+                event->set_text("");
+            } else {
+                std::string text(*it);
+                for (++it; it != args.end() && update.count(*it) == 0; ++it) {
+                    text.push_back(' ');
+                    text.append(*it);
+                }
+                event->set_text(text);
+            }
+        } else {
+            Http::response(200, "Expected name/start/text, not: " + *it);
+            return true;
+        }
+    }
+    if (event->store()) {
+        Http::response(200, "Event updated");
+        auto next_event = Event::next(db);
+        if (next_event->id() != first_event || next_event->id() == event->id()) {
+            signal_event(next_event);
+        }
+    } else {
+        Http::response(200, "Update failed");
+    }
     return true;
 }
 
@@ -313,7 +396,7 @@ bool show(const std::string& channel,
             for (; it != going.end(); ++it) {
                 ss << it->name << ": not going";
                 if (!it->note.empty()) {
-                    ss << ' ' << it->note;
+                    ss << ", " << it->note;
                 }
                 ss << std::endl;
             }
@@ -327,8 +410,74 @@ bool going(const std::string& channel,
            std::map<std::string, std::string>& data,
            bool going) {
     std::vector<std::string> args;
+    const auto& user_name = data["user_name"];
+    if (user_name.empty()) {
+        Http::response(500, "No user_name");
+        return true;
+    }
     if (!parse(data["text"], &args)) return true;
-    
+    std::unique_ptr<Event> event;
+    std::vector<unsigned long> indexes;
+    std::string note;
+    auto db = open(channel);
+    if (!db) return true;
+    if (args.empty()) {
+        event = Event::next(db);
+    } else if (args.size() == 1) {
+        try {
+            size_t end;
+            auto tmp = std::stoul(args.front(), &end);
+            if (end == args.front().size()) {
+                indexes.push_back(tmp);
+            }
+        } catch (std::invalid_argument& e) {
+        }
+
+        if (indexes.empty()) {
+            event = Event::next(db);
+            note = args.front();
+        }
+    } else {
+        auto it = args.begin() + 1;
+        if (!append_indexes(args.begin(), it, &indexes)) {
+            return true;
+        }
+        note = *it;
+        for (++it; it != args.end(); ++it) {
+            note.push_back(' ');
+            note.append(*it);
+        }
+    }
+    if (!event) {
+        auto events = Event::all(db);
+        if (events.empty()) {
+            Http::response(200, "There are no events to attend");
+            return true;
+        }
+        if (indexes.front() >= events.size()) {
+            std::ostringstream ss;
+            ss << "There are no such event to attend: " << indexes.front();
+            Http::response(200, ss.str());
+            return true;
+        }
+        event.swap(events[indexes.front()]);
+    }
+    event->update_going(user_name, going, note);
+    if (event->store()) {
+        Http::response(200, "Your wish have been recorded, if not granted");
+        auto next_event = Event::next(db);
+        if (next_event->id() == event->id()) {
+            if (going) {
+                signal_channel(user_name + " will be attending " +
+                               event->name());
+            } else {
+                signal_channel(user_name + " will not be attending " +
+                               event->name());
+            }
+        }
+    } else {
+        Http::response(200, "Event store failed");
+    }
     return true;
 }
 
