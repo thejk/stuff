@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -10,12 +11,11 @@
 
 #include "args.hh"
 #include "cgi.hh"
-#include "event.hh"
 #include "db.hh"
+#include "event.hh"
+#include "fsutils.hh"
 #include "http.hh"
 #include "sqlite3_db.hh"
-
-#define DB_PATH "/var/stuff/"
 
     /*
 token=gIkuvaNzQIHg97ATvDxqgjtO
@@ -33,6 +33,8 @@ using namespace stuff;
 
 namespace {
 
+std::string g_db_path;
+
 std::shared_ptr<DB> open(const std::string& channel) {
     std::string tmp = channel;
     for (auto it = tmp.begin(); it != tmp.end(); ++it) {
@@ -43,7 +45,11 @@ std::shared_ptr<DB> open(const std::string& channel) {
             *it = '.';
         }
     }
-    auto db = SQLite3::open(DB_PATH "/" + tmp + ".db");
+    if (!mkdir_p(g_db_path)) {
+        Http::response(200, "Unable to create database directory");
+        return nullptr;
+    }
+    auto db = SQLite3::open(g_db_path + tmp + ".db");
     if (!db || db->bad()) {
         Http::response(200, "Unable to open database");
         db.reset();
@@ -524,6 +530,19 @@ bool handle_request(CGI* cgi) {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        g_db_path = LOCALSTATEDIR "/";
+    } else if (argc == 2) {
+        g_db_path = argv[1];
+        if (g_db_path.empty()) {
+            g_db_path = ".";
+        } else if (g_db_path.back() != '/') {
+            g_db_path.push_back('/');
+        }
+    } else {
+        std::cerr << "Too many arguments" << std::endl;
+        return EXIT_FAILURE;
+    }
     return CGI::run(handle_request);
 }
