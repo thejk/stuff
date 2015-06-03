@@ -26,4 +26,18 @@ std::string ascii_tolower(const std::string& str) {
     return str;
 }
 
+namespace {
+bool is_ws(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+}  // namespace
+
+std::string trim(const std::string& str) {
+    auto start = str.begin();
+    while (start != str.end() && is_ws(*start)) start++;
+    auto end = str.end() - 1;
+    while (end >= start && is_ws(*end)) end--;
+    return std::string(start, end + 1);
+}
+
 }  // namespace stuff

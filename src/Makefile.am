@@ -1,12 +1,13 @@
 MAINTAINERCLEANFILES = Makefile.in
 
-AM_CPPFLAGS = @DEFINES@ -DLOCALSTATEDIR='"@localstatedir@/stuff"'
+AM_CPPFLAGS = @DEFINES@ -DLOCALSTATEDIR='"@localstatedir@/stuff"' \
+			  -DSYSCONFDIR='"@sysconfdir@/stuff"'
 
 bin_PROGRAMS = event
 noinst_LTLIBRARIES = libdb.la libcgi.la
 
 event_SOURCES = event.cc event.hh event_main.cc common.hh cgi.hh db.hh \
-				fsutils.cc fsutils.hh
+				fsutils.cc fsutils.hh config.cc config.hh
 event_LDADD = libdb.la libcgi.la
 
 libcgi_la_SOURCES = cgi.hh common.hh cgi.cc \

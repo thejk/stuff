@@ -11,6 +11,7 @@
 
 #include "args.hh"
 #include "cgi.hh"
+#include "config.hh"
 #include "db.hh"
 #include "event.hh"
 #include "fsutils.hh"
@@ -33,7 +34,7 @@ using namespace stuff;
 
 namespace {
 
-std::string g_db_path;
+std::unique_ptr<Config> g_cfg;
 
 std::shared_ptr<DB> open(const std::string& channel) {
     std::string tmp = channel;
@@ -45,11 +46,13 @@ std::shared_ptr<DB> open(const std::string& channel) {
             *it = '.';
         }
     }
-    if (!mkdir_p(g_db_path)) {
+    std::string path = g_cfg->get("db_path", LOCALSTATEDIR);
+    if (path.empty()) path = ".";
+    if (!mkdir_p(path)) {
         Http::response(200, "Unable to create database directory");
         return nullptr;
     }
-    auto db = SQLite3::open(g_db_path + tmp + ".db");
+    auto db = SQLite3::open(path + "/" + tmp + ".db");
     if (!db || db->bad()) {
         Http::response(200, "Unable to open database");
         db.reset();
@@ -142,11 +145,10 @@ bool parse_time(const std::string& value, time_t* date) {
 }
 
 bool create(const std::string& channel,
-            std::map<std::string, std::string>& data) {
-    std::vector<std::string> args;
-    if (!parse(data["text"], &args)) return true;
+            std::map<std::string, std::string>& data,
+            std::vector<std::string>& args) {
     if (args.size() < 2) {
-        Http::response(200, "Usage: /create NAME START [TEXT]");
+        Http::response(200, "Usage: create NAME START [TEXT]");
         return true;
     }
     std::string name, text;
@@ -214,9 +216,8 @@ bool append_indexes(Iterator begin, Iterator end,
 }
 
 bool cancel(const std::string& channel,
-            std::map<std::string, std::string>& data) {
-    std::vector<std::string> args;
-    if (!parse(data["text"], &args)) return true;
+            std::map<std::string, std::string>& data,
+            std::vector<std::string>& args) {
     std::vector<unsigned long> indexes;
     if (args.empty()) {
         indexes.push_back(0);
@@ -265,15 +266,14 @@ bool cancel(const std::string& channel,
 }
 
 bool update(const std::string& channel,
-            std::map<std::string, std::string>& data) {
+            std::map<std::string, std::string>& data,
+            std::vector<std::string>& args) {
     std::set<std::string> update;
     update.insert("name");
     update.insert("start");
     update.insert("text");
-    std::vector<std::string> args;
-    if (!parse(data["text"], &args)) return true;
     if (args.empty()) {
-        Http::response(200, "Usage: /update [INDEX] [name NAME] [start START] [text TEXT]");
+        Http::response(200, "Usage: update [INDEX] [name NAME] [start START] [text TEXT]");
         return true;
     }
     auto db = open(channel);
@@ -355,9 +355,8 @@ bool update(const std::string& channel,
 }
 
 bool show(const std::string& channel,
-          std::map<std::string, std::string>& data) {
-    std::vector<std::string> args;
-    if (!parse(data["text"], &args)) return true;
+          std::map<std::string, std::string>& data,
+          std::vector<std::string>& args) {
     std::vector<unsigned long> indexes;
     if (args.empty()) {
         indexes.push_back(0);
@@ -414,14 +413,13 @@ bool show(const std::string& channel,
 
 bool going(const std::string& channel,
            std::map<std::string, std::string>& data,
+           std::vector<std::string>& args,
            bool going) {
-    std::vector<std::string> args;
     const auto& user_name = data["user_name"];
     if (user_name.empty()) {
         Http::response(500, "No user_name");
         return true;
     }
-    if (!parse(data["text"], &args)) return true;
     std::unique_ptr<Event> event;
     std::vector<unsigned long> indexes;
     std::string note;
@@ -487,6 +485,46 @@ bool going(const std::string& channel,
     return true;
 }
 
+bool help(std::vector<std::string>& args) {
+    std::ostringstream ss;
+    if (args.empty()) {
+        ss << "Usage: help COMMAND" << std::endl;
+        ss << "Known commands: create, update, cancel, show, going, !going";
+        return true;
+    } else if (args.front() == "create") {
+        ss << "Usage: create NAME START [TEXT]" << std::endl;
+        ss << "Create a new event with the name NAME starting at START with"
+           << " an optional description TEXT." << std::endl;
+        ss << "START can be of the format: [DATE|DAY] HH:MM";
+    } else if (args.front() == "update") {
+        ss << "Usage: update [INDEX] [name NAME] [start START] [text TEXT]"
+           << std::endl;
+        ss << "Update an event, specified by index (default is next event)"
+           << std::endl;
+        ss << "See help for create for description of NAME, START and TEXT.";
+    } else if (args.front() == "cancel") {
+        ss << "Usage: cancel [INDEX...]" << std::endl;
+        ss << "Cancel one or more events given by index"
+           << " (default is next event)";
+    } else if (args.front() == "show") {
+        ss << "Usage: show [INDEX...]" << std::endl;
+        ss << "Show one or more events given by index"
+           << " (default is next event)";
+    } else if (args.front() == "going") {
+        ss << "Usage: going [INDEX] [NOTE]" << std::endl;
+        ss << "Join an event specified by index (default is next event)"
+           << " and add an optional NOTE";
+    } else if (args.front() == "!going") {
+        ss << "Usage: !going [INDEX] [NOTE]" << std::endl;
+        ss << "Un-join an event specified by index (default is next event)"
+           << " and add an optional NOTE";
+    } else {
+        ss << "Unknown command: " << args.front();
+    }
+    Http::response(200, ss.str());
+    return true;
+}
+
 bool handle_request(CGI* cgi) {
     switch (cgi->request_type()) {
     case CGI::GET:
@@ -499,50 +537,59 @@ bool handle_request(CGI* cgi) {
 
     std::map<std::string, std::string> data;
     cgi->get_data(&data);
+    const auto& token = data["token"];
+    if (token != g_cfg->get("token", "")) {
+        Http::response(500, "Bad token");
+        return true;
+    }
     const auto& channel = data["channel"];
     if (channel.empty()) {
         Http::response(500, "No channel");
         return true;
     }
-    auto command = data["command"];
-    if (command.front() == '/') command = command.substr(1);
+    std::vector<std::string> args;
+    if (!parse(data["text"], &args)) return true;
+    if (args.empty()) {
+        std::ostringstream ss;
+        ss << "Usage: [COMMAND] [ARGUMENTS]" << std::endl
+           << "For more help about a command, use " << data["command"]
+           << " help COMMAND";
+        Http::response(200, ss.str());
+        return true;
+    }
+    auto command = args.front();
+    args.erase(args.begin());
     if (command == "create") {
-        return create(channel, data);
+        return create(channel, data, args);
     }
     if (command == "cancel") {
-        return cancel(channel, data);
+        return cancel(channel, data, args);
     }
     if (command == "update") {
-        return update(channel, data);
+        return update(channel, data, args);
     }
     if (command == "show") {
-        return show(channel, data);
+        return show(channel, data, args);
     }
     if (command == "going") {
-        return going(channel, data, true);
+        return going(channel, data, args, true);
     }
     if (command == "!going") {
-        return going(channel, data, false);
+        return going(channel, data, args, false);
     }
-    Http::response(500, "Unknown command: " + command);
+    if (command == "help") {
+        return help(args);
+    }
+    Http::response(200, "Unknown command: " + command);
     return true;
 }
 
 }  // namespace
 
-int main(int argc, char** argv) {
-    if (argc < 2) {
-        g_db_path = LOCALSTATEDIR "/";
-    } else if (argc == 2) {
-        g_db_path = argv[1];
-        if (g_db_path.empty()) {
-            g_db_path = ".";
-        } else if (g_db_path.back() != '/') {
-            g_db_path.push_back('/');
-        }
-    } else {
-        std::cerr << "Too many arguments" << std::endl;
-        return EXIT_FAILURE;
+int main() {
+    g_cfg = Config::create();
+    if (!g_cfg->load("./event.config")) {
+        g_cfg->load(SYSCONFDIR "/event.config");
     }
     return CGI::run(handle_request);
 }
