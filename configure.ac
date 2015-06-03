@@ -10,8 +10,7 @@ AM_PROG_CC_C_O
 AC_LANG([C++])
 
 DEFINES=
-#-fno-exceptions
-AX_APPEND_COMPILE_FLAGS([-fno-rtti],DEFINES)
+AX_APPEND_COMPILE_FLAGS([-fno-rtti -fno-exceptions],DEFINES)
 
 # Test c++11
 OLDCXXFLAGS="$CXXFLAGS"
@@ -31,7 +30,7 @@ std::shared_ptr<int> j(i);
                [AC_MSG_RESULT([yes])
                 DEFINES="$DEFINES -std=c++11"],
                [AC_MSG_RESULT([no])
-                CXXFLAGS="-std=c++11 -stdlib=libc++ $CXXFLAGS"
+                CXXFLAGS="-std=c++11 -stdlib=libc++ $OLDCXXFLAGS"
                 AC_MSG_CHECKING([for C++11 using (-std=c++11 -stdlib=libc++)])
                 AC_LINK_IFELSE([AC_LANG_PROGRAM([[
 #include <memory>

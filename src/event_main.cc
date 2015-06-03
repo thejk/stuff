@@ -199,18 +199,14 @@ template<typename Iterator>
 bool append_indexes(Iterator begin, Iterator end,
                     std::vector<unsigned long>* out) {
     for (auto it = begin; it != end; ++it) {
-        try {
-            size_t end;
-            auto tmp = std::stoul(*it, &end);
-            if (end != it->size()) {
-                Http::response(200, "Bad index: " + *it);
-                return false;
-            }
-            out->push_back(tmp);
-        } catch (std::invalid_argument& e) {
+        char* end = nullptr;
+        errno = 0;
+        auto tmp = strtoul(it->c_str(), &end, 10);
+        if (errno || !end || *end) {
             Http::response(200, "Bad index: " + *it);
             return false;
         }
+        out->push_back(tmp);
     }
     return true;
 }
@@ -428,13 +424,11 @@ bool going(const std::string& channel,
     if (args.empty()) {
         event = Event::next(db);
     } else if (args.size() == 1) {
-        try {
-            size_t end;
-            auto tmp = std::stoul(args.front(), &end);
-            if (end == args.front().size()) {
-                indexes.push_back(tmp);
-            }
-        } catch (std::invalid_argument& e) {
+        char* end = nullptr;
+        errno = 0;
+        auto tmp = strtoul(args.front().c_str(), &end, 10);
+        if (errno == 0 && end && !*end) {
+            indexes.push_back(tmp);
         }
 
         if (indexes.empty()) {
