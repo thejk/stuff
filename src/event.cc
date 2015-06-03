@@ -198,10 +198,10 @@ private:
             bool is_going;
             std::string note;
             int64_t added;
-            if (!snapshot->get(0, &name) || !snapshot->get(1, &is_going) ||
-                !snapshot->get(3, &added))
+            if (!snapshot->get(1, &name) || !snapshot->get(2, &is_going) ||
+                !snapshot->get(4, &added))
                 return false;
-            if (!snapshot->get(2, &note))
+            if (!snapshot->get(3, &note))
                 note = "";
             going_.emplace_back(name, is_going, note,
                                 static_cast<time_t>(added));
