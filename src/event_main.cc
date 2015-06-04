@@ -484,7 +484,6 @@ bool help(std::vector<std::string>& args) {
     if (args.empty()) {
         ss << "Usage: help COMMAND" << std::endl;
         ss << "Known commands: create, update, cancel, show, going, !going";
-        return true;
     } else if (args.front() == "create") {
         ss << "Usage: create NAME START [TEXT]" << std::endl;
         ss << "Create a new event with the name NAME starting at START with"
@@ -536,9 +535,9 @@ bool handle_request(CGI* cgi) {
         Http::response(500, "Bad token");
         return true;
     }
-    const auto& channel = data["channel"];
+    const auto& channel = data["channel_name"];
     if (channel.empty()) {
-        Http::response(500, "No channel");
+        Http::response(500, "No channel");;
         return true;
     }
     std::vector<std::string> args;
