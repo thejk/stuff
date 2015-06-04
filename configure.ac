@@ -72,6 +72,11 @@ AC_SUBST(FASTCGI_CFLAGS)
 AC_SUBST(FASTCGI_LIBS)
 AC_DEFINE_UNQUOTED([HAVE_FASTCGI],[$have_fastcgi],[define to 1 if FastCGI is available])
 
+# Neon
+
+# 7.25 ???
+PKG_CHECK_MODULES([CURL],[libcurl >= 7.25.0])
+
 # Finish up
 
 AC_CONFIG_HEADERS([src/config.h])

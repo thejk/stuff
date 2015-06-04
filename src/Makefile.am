@@ -11,7 +11,8 @@ event_SOURCES = event.cc event.hh event_main.cc common.hh cgi.hh db.hh \
 event_LDADD = libdb.la libcgi.la
 
 sender_SOURCES = common.hh sender.cc json.hh json.cc
-sender_LDADD = libutil.la
+sender_CPPFLAGS = $(AM_CPPFLAGS) @CURL_CFLAGS@
+sender_LDADD = libutil.la @CURL_LIBS@
 
 libcgi_la_SOURCES = cgi.hh common.hh cgi.cc \
 					query_parser.hh query_parser.cc \
