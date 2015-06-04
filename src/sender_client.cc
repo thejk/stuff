@@ -67,22 +67,22 @@ private:
                 }
             } else if (pos < 4 + channel.size()) {
                 size_t const avail = 4 + channel.size() - pos;
-                ret = write(sock_, channel.data() + (pos - 4), avail);
+                ret = write(sock_, channel.data() + pos - 4, avail);
                 if (ret > 0) {
                     pos += ret;
                     if (static_cast<size_t>(ret) == avail) continue;
                 }
             } else if (pos < 8 + channel.size()) {
                 size_t const avail = 8 + channel.size() - pos;
-                ret = write(sock_,
-                            reinterpret_cast<char*>(&size2) + pos, avail);
+                ret = write(sock_, reinterpret_cast<char*>(&size2)
+                            + pos - 4 - channel.size(), avail);
                 if (ret > 0) {
                     pos += ret;
                     if (static_cast<size_t>(ret) == avail) continue;
                 }
             } else {
                 size_t const avail = len - pos;
-                ret = write(sock_, message.data() + (pos - 8 - channel.size()),
+                ret = write(sock_, message.data() + pos - 8 - channel.size(),
                             avail);
                 if (ret > 0) {
                     pos += ret;

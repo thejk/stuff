@@ -40,7 +40,7 @@ void queue_message(const std::string& channel, const std::string& message);
 class Client {
 public:
     Client(int sock)
-        : sock_(sock), have_channel_(false), size_(0) {
+        : sock_(sock), fill_(0), have_channel_(false), size_(0) {
     }
 
     ~Client() {
@@ -71,7 +71,7 @@ public:
                     if (size_ == 0) {
                         auto const avail = std::min(fill - pos,
                                                     static_cast<size_t>(4));
-                        memcpy(buf_ + fill_, buf, avail);
+                        memcpy(buf_ + fill_, buf + pos, avail);
                         fill_ += avail;
                         pos += avail;
                         if (fill_ == 4) {
@@ -89,13 +89,14 @@ public:
                         pos += avail;
                         if (channel_.size() == size_) {
                             have_channel_ = true;
+                            size_ = 0;
                         }
                     }
                 } else {
                     if (size_ == 0) {
                         auto const avail = std::min(fill - pos,
                                                     static_cast<size_t>(4));
-                        memcpy(buf_ + fill_, buf, avail);
+                        memcpy(buf_ + fill_, buf + pos, avail);
                         fill_ += avail;
                         pos += avail;
                         if (fill_ == 4) {
@@ -109,7 +110,7 @@ public:
                     } else {
                         auto const avail = std::min(fill - pos,
                                                     size_ - message_.size());
-                        channel_.append(buf + pos, buf + pos + avail);
+                        message_.append(buf + pos, buf + pos + avail);
                         pos += avail;
                         if (message_.size() == size_) {
                             send_message();
