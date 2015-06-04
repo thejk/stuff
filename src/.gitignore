@@ -4,4 +4,6 @@
 /stamp-h1
 /libcgi.la
 /libdb.la
+/libutil.la
 /event
+/sender

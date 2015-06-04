@@ -16,6 +16,7 @@
 #include "event.hh"
 #include "fsutils.hh"
 #include "http.hh"
+#include "sender_client.hh"
 #include "sqlite3_db.hh"
 
     /*
@@ -35,6 +36,7 @@ using namespace stuff;
 namespace {
 
 std::unique_ptr<Config> g_cfg;
+std::unique_ptr<SenderClient> g_sender;
 
 std::shared_ptr<DB> open(const std::string& channel) {
     std::string tmp = channel;
@@ -95,11 +97,13 @@ std::string format_date(time_t date) {
     return tmp;
 }
 
-void signal_channel(const std::string& str) {
-    
+void signal_channel(const std::string& channel, const std::string& str) {
+    if (!g_sender) return;
+    g_sender->send(channel, str);
 }
 
-void signal_event(const std::unique_ptr<Event>& event) {
+void signal_event(const std::string& channel,
+                  const std::unique_ptr<Event>& event) {
     std::ostringstream ss;
     ss << event->name() << " @ " << format_date(event->start()) << std::endl;
     if (!event->text().empty()) {
@@ -107,7 +111,7 @@ void signal_event(const std::unique_ptr<Event>& event) {
     }
     ss << std::endl;
     ss << "Use /going to join the event" << std::endl;
-    signal_channel(ss.str());
+    signal_channel(channel, ss.str());
 }
 
 bool parse_time(const std::string& value, time_t* date) {
@@ -190,7 +194,7 @@ bool create(const std::string& channel,
     Http::response(200, "Event created");
     auto next_event = Event::next(db);
     if (next_event->id() == event->id()) {
-        signal_event(next_event);
+        signal_event(channel, next_event);
     }
     return true;
 }
@@ -256,7 +260,7 @@ bool cancel(const std::string& channel,
         Http::response(200, "Event removed");
     }
     if (!signal.empty()) {
-        signal_channel(signal);
+        signal_channel(channel, signal);
     }
     return true;
 }
@@ -341,8 +345,9 @@ bool update(const std::string& channel,
     if (event->store()) {
         Http::response(200, "Event updated");
         auto next_event = Event::next(db);
-        if (next_event->id() != first_event || next_event->id() == event->id()) {
-            signal_event(next_event);
+        if (next_event->id() != first_event ||
+            next_event->id() == event->id()) {
+            signal_event(channel, next_event);
         }
     } else {
         Http::response(200, "Update failed");
@@ -466,10 +471,10 @@ bool going(const std::string& channel,
         auto next_event = Event::next(db);
         if (next_event->id() == event->id()) {
             if (going) {
-                signal_channel(user_name + " will be attending " +
+                signal_channel(channel, user_name + " will be attending " +
                                event->name());
             } else {
-                signal_channel(user_name + " will not be attending " +
+                signal_channel(channel, user_name + " will not be attending " +
                                event->name());
             }
         }
@@ -584,5 +589,9 @@ int main() {
     if (!g_cfg->load("./event.config")) {
         g_cfg->load(SYSCONFDIR "/event.config");
     }
-    return CGI::run(handle_request);
+    g_sender = SenderClient::create(g_cfg.get());
+    int ret = CGI::run(handle_request);
+    g_sender.reset();
+    g_cfg.reset();
+    return ret;
 }
