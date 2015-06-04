@@ -77,34 +77,34 @@ public:
     }
 
     void put(const std::string& name, const std::string& value) override {
-        put(name, new StringJsonValue(value));
+        store(name, new StringJsonValue(value));
     }
     void put(const std::string& name, double value) override {
-        put(name, new BasicJsonValue(value));
+        store(name, new BasicJsonValue(value));
     }
     void put(const std::string& name, int64_t value) override {
-        put(name, new BasicJsonValue(value));
+        store(name, new BasicJsonValue(value));
     }
     void put(const std::string& name, bool value) override {
-        put(name, new BasicJsonValue(value));
+        store(name, new BasicJsonValue(value));
     }
     void put(const std::string& name, std::nullptr_t value) override {
-        put(name, value);
+        store(name, value);
     }
     void put(const std::string& name,
              std::shared_ptr<JsonObject> obj) override {
         if (obj) {
-            put(name, new ObjectJsonValue(obj));
+            store(name, new ObjectJsonValue(obj));
         } else {
-            put(name, nullptr);
+            store(name, nullptr);
         }
     }
     void put(const std::string& name,
              std::shared_ptr<JsonArray> array) override {
         if (array) {
-            put(name, new ArrayJsonValue(array));
+            store(name, new ArrayJsonValue(array));
         } else {
-            put(name, nullptr);
+            store(name, nullptr);
         }
     }
 
@@ -165,8 +165,8 @@ public:
         return ss.str();
     }
 
-    void put(const std::string& name, std::unique_ptr<JsonValue> ptr) {
-        data_[name].swap(ptr);
+    void store(const std::string& name, JsonValue* ptr) {
+        data_[name].reset(ptr);
     }
 
     std::unordered_map<std::string, std::unique_ptr<JsonValue>> data_;
@@ -178,34 +178,34 @@ public:
     }
 
     void put(size_t index, const std::string& value) override {
-        put(index, new StringJsonValue(value));
+        store(index, new StringJsonValue(value));
     }
     void put(size_t index, double value) override {
-        put(index, new BasicJsonValue(value));
+        store(index, new BasicJsonValue(value));
     }
     void put(size_t index, int64_t value) override {
-        put(index, new BasicJsonValue(value));
+        store(index, new BasicJsonValue(value));
     }
     void put(size_t index, bool value) override {
-        put(index, new BasicJsonValue(value));
+        store(index, new BasicJsonValue(value));
     }
     void put(size_t index, std::nullptr_t value) override {
-        put(index, value);
+        store(index, value);
     }
     void put(size_t index,
              std::shared_ptr<JsonObject> obj) override {
         if (obj) {
-            put(index, new ObjectJsonValue(obj));
+            store(index, new ObjectJsonValue(obj));
         } else {
-            put(index, nullptr);
+            store(index, nullptr);
         }
     }
     void put(size_t index,
              std::shared_ptr<JsonArray> array) override {
         if (array) {
-            put(index, new ArrayJsonValue(array));
+            store(index, new ArrayJsonValue(array));
         } else {
-            put(index, nullptr);
+            store(index, nullptr);
         }
     }
 
@@ -264,11 +264,11 @@ public:
         data_.resize(size);
     }
 
-    void put(size_t index, std::unique_ptr<JsonValue> ptr) {
+    void store(size_t index, JsonValue* ptr) {
         while (index >= data_.size()) {
             data_.emplace_back(nullptr);
         }
-        data_[index].swap(ptr);
+        data_[index].reset(ptr);
     }
 
     std::vector<std::unique_ptr<JsonValue>> data_;
