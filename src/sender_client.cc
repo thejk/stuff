@@ -32,7 +32,7 @@ public:
         if (!config) return false;
         sender_ = config->get("sender", "");
         if (sender_.empty()) return false;
-        return setup();
+        return true;
     }
 
     void send(const std::string& channel, const std::string& message) override {

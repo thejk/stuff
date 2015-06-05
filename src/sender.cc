@@ -222,6 +222,21 @@ void queue_message(const std::string& channel, const std::string& message) {
     g_info.requests.emplace_back(g_info.multi, g_info.url, obj->str());
 }
 
+bool make_nonblock(int sock) {
+    int flags = fcntl(sock, F_GETFL, 0);
+    if (flags < 0) {
+        return false;
+    }
+    if (!(flags & O_NONBLOCK)) {
+        flags |= O_NONBLOCK;
+        if (fcntl(sock, F_SETFL, flags) < 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+
 }  // namespace
 
 int main() {
@@ -311,9 +326,15 @@ int main() {
         goto error;
     }
 
+    make_nonblock(sock_);
+
     {
         int value = 1;
+#ifdef SO_REUSEPORT
         setsockopt(sock_, SOL_SOCKET, SO_REUSEPORT, &value, sizeof(value));
+#else
+        setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
+#endif
     }
 
     signal(SIGPIPE, SIG_IGN);
@@ -392,6 +413,7 @@ int main() {
                 std::cerr << "Accept failed: " << strerror(errno);
                 goto error;
             }
+            make_nonblock(sock);
             if (clients.size() == MAX_CLIENTS) {
                 // Remove oldest
                 clients.erase(clients.begin());
