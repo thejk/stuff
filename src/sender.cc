@@ -9,6 +9,7 @@
 #include <csignal>
 #include <iostream>
 #include <netdb.h>
+#include <syslog.h>
 #include <time.h>
 #include <unistd.h>
 #include <vector>
@@ -45,20 +46,14 @@ public:
         : sock_(sock), fill_(0), have_channel_(false), size_(0) {
     }
 
-    ~Client() {
-        if (sock_ != -1) {
-            close(sock_);
-        }
-    }
-
     int sock() const {
-        return sock_;
+        return sock_.get();
     }
 
     bool read() {
         while (true) {
             char buf[1024];
-            auto ret = ::read(sock_, buf, sizeof(buf));
+            auto ret = ::read(sock_.get(), buf, sizeof(buf));
             if (ret < 0) {
                 if (errno == EINTR) continue;
                 return errno == EWOULDBLOCK || errno == EAGAIN;
@@ -133,7 +128,7 @@ private:
         message_.clear();
     }
 
-    int sock_;
+    sockguard sock_;
 
     char buf_[4];
     size_t fill_;
@@ -222,56 +217,23 @@ void queue_message(const std::string& channel, const std::string& message) {
     g_info.requests.emplace_back(g_info.multi, g_info.url, obj->str());
 }
 
-bool make_nonblock(int sock) {
-    int flags = fcntl(sock, F_GETFL, 0);
-    if (flags < 0) {
-        return false;
-    }
-    if (!(flags & O_NONBLOCK)) {
-        flags |= O_NONBLOCK;
-        if (fcntl(sock, F_SETFL, flags) < 0) {
-            return false;
-        }
-    }
-    return true;
-}
-
-
-}  // namespace
-
-int main() {
-    auto cfg = Config::create();
-    if (!cfg->load("./sender.config")) {
-        cfg->load(SYSCONFDIR "/sender.config");
-    }
-    g_info.username = cfg->get("username", "stuff-sender-bot");
-    g_info.url = cfg->get("url", "");
-    if (g_info.url.empty()) {
-        std::cerr << "No url configured" << std::endl;
-        return EXIT_FAILURE;
-    }
-    g_info.icon_url = cfg->get("icon_url", "");
-    g_info.icon_emoji = cfg->get("icon_emoji", "");
-    auto const& listener = cfg->get("listener", "");
-    if (listener.empty()) {
-        std::cerr << "No listener configured" << std::endl;
-        return EXIT_FAILURE;
-    }
+int run(const std::string& listener, int fd) {
+    openlog("sender", LOG_PID, LOG_DAEMON);
 
     if (curl_global_init(CURL_GLOBAL_ALL)) {
-        std::cerr << "CURL failed to initialize" << std::endl;
+        syslog(LOG_ERR, "CURL failed to initialize");
         return EXIT_FAILURE;
     }
     g_info.multi = curl_multi_init();
     if (!g_info.multi) {
-        std::cerr << "CURL didn't initialize" << std::endl;
+        syslog(LOG_ERR, "CURL did not to initialize");
         return EXIT_FAILURE;
     }
 
     std::vector<Client> clients;
     int still_running;
     int exitvalue;
-    int sock_ = -1;
+    sockguard sock_;
     size_t pos = listener.find(':');
     if (pos != std::string::npos) {
         // [host]:port
@@ -283,63 +245,78 @@ int main() {
         hints.ai_flags = AI_PASSIVE;
         if (getaddrinfo(pos == 0 ? nullptr : listener.substr(0, pos).c_str(),
                         listener.substr(pos + 1).c_str(), &hints, &res)) {
-            std::cerr << "Invalid host or port in: " << listener << std::endl;
+            syslog(LOG_ERR, "Invalid host or port in: %s", listener.c_str());
             goto error;
         }
         for (auto ptr = res; ptr; ptr = ptr->ai_next) {
-            sock_ = socket(ptr->ai_family, ptr->ai_socktype,
-                           ptr->ai_protocol);
-            if (sock_ == -1) continue;
-            if (bind(sock_, res->ai_addr, res->ai_addrlen)) {
-                close(sock_);
-                sock_ = -1;
+            sock_.reset(socket(ptr->ai_family, ptr->ai_socktype,
+                               ptr->ai_protocol));
+            if (!sock_) continue;
+            if (bind(sock_.get(), res->ai_addr, res->ai_addrlen)) {
+                sock_.reset();
                 continue;
             }
             break;
         }
         freeaddrinfo(res);
-        if (sock_ == -1) {
-            std::cerr << "Unable to bind: " << listener << std::endl;
+        if (!sock_) {
+            syslog(LOG_ERR, "Unable to bind: %s", listener.c_str());
             goto error;
         }
     } else {
         // socket
-        sock_ = socket(PF_LOCAL, SOCK_STREAM, 0);
-        if (sock_ == -1) {
-            std::cerr << "Unable to create local socket: " << strerror(errno)
-                      << std::endl;
+        sock_.reset(socket(PF_LOCAL, SOCK_STREAM, 0));
+        if (!sock_) {
+            syslog(LOG_ERR, "Unable to create a unix socket: %s",
+                   strerror(errno));
             goto error;
         }
         struct sockaddr_un name;
         name.sun_family = AF_LOCAL;
         strncpy(name.sun_path, listener.c_str(), sizeof(name.sun_path));
         name.sun_path[sizeof(name.sun_path) - 1] = '\0';
-        if (bind(sock_, reinterpret_cast<struct sockaddr*>(&name),
-                 SUN_LEN(&name))) {
-            std::cerr << "Bind failed: " << strerror(errno) << std::endl;
+        while (true) {
+            if (bind(sock_.get(), reinterpret_cast<struct sockaddr*>(&name),
+                     SUN_LEN(&name)) == 0) {
+                break;
+            }
+            if (errno == EADDRINUSE) {
+                if (unlink(listener.c_str()) == 0) {
+                    continue;
+                }
+                errno = EADDRINUSE;
+            }
+            syslog(LOG_ERR, "Bind failed: %s", strerror(errno));
             goto error;
         }
     }
 
-    if (listen(sock_, 10)) {
-        std::cerr << "Listen failed: " << strerror(errno) << std::endl;
+    if (listen(sock_.get(), 10)) {
+        syslog(LOG_ERR, "Listen failed: %s", strerror(errno));
         goto error;
     }
 
-    make_nonblocking(sock_);
+    make_nonblocking(sock_.get());
 
     {
         int value = 1;
 #ifdef SO_REUSEPORT
-        setsockopt(sock_, SOL_SOCKET, SO_REUSEPORT, &value, sizeof(value));
+        setsockopt(sock_.get(), SOL_SOCKET, SO_REUSEPORT,
+                   &value, sizeof(value));
 #else
-        setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
+        setsockopt(sock_.get(), SOL_SOCKET, SO_REUSEADDR,
+                   &value, sizeof(value));
 #endif
     }
 
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, quit);
     signal(SIGTERM, quit);
+
+    while (true) {
+        if (write(fd, "", 1) != -1 || errno != EINTR) break;
+    }
+    close(fd);
 
     while (!g_quit) {
         curl_multi_perform(g_info.multi, &still_running);
@@ -371,12 +348,12 @@ int main() {
         }
         if (curl_multi_fdset(g_info.multi, &read_set, &write_set, &err_set,
                              &max) != CURLM_OK) {
-            std::cerr << "curl_multi_fdset failed" << std::endl;
+            syslog(LOG_ERR, "curl_multi_fdset failed");
             goto error;
         }
 
-        max = std::max(max, sock_);
-        FD_SET(sock_, &read_set);
+        max = std::max(max, sock_.get());
+        FD_SET(sock_.get(), &read_set);
         for (auto it = clients.begin(); it != clients.end();) {
             if (it->sock() == -1) {
                 it = clients.erase(it);
@@ -389,7 +366,7 @@ int main() {
         auto ret = select(max + 1, &read_set, &write_set, &err_set, to);
         if (ret < 0) {
             if (errno == EINTR) continue;
-            std::cerr << "Select failed: " << strerror(errno);
+            syslog(LOG_ERR, "Select failed: %s", strerror(errno));
             goto error;
         }
         for (auto it = clients.begin(); ret > 0 && it != clients.end();) {
@@ -404,23 +381,19 @@ int main() {
                 ++it;
             }
         }
-        if (ret > 0 && FD_ISSET(sock_, &read_set)) {
+        if (ret > 0 && FD_ISSET(sock_.get(), &read_set)) {
             ret--;
-            auto sock = accept(sock_, nullptr, nullptr);
-            if (sock < 0) {
+            sockguard sock(accept(sock_.get(), nullptr, nullptr));
+            if (!sock) {
                 if (errno == EINTR) continue;
                 if (errno == EWOULDBLOCK || errno == EAGAIN) continue;
-                std::cerr << "Accept failed: " << strerror(errno);
-                goto error;
-            }
-            if (!make_nonblocking(sock)) {
-                close(sock);
-            } else {
+                syslog(LOG_WARNING, "Accept failed: %s", strerror(errno));
+            } else if (make_nonblocking(sock.get())) {
                 if (clients.size() == MAX_CLIENTS) {
                     // Remove oldest
                     clients.erase(clients.begin());
                 }
-                clients.emplace_back(sock);
+                clients.emplace_back(sock.release());
             }
         }
     }
@@ -435,6 +408,82 @@ int main() {
     g_info.requests.clear();
     curl_multi_cleanup(g_info.multi);
     curl_global_cleanup();
-    close(sock_);
+    unlink(listener.c_str());
+    closelog();
     return exitvalue;
+}
+
+}  // namespace
+
+int main() {
+    auto cfg = Config::create();
+    if (!cfg->load("./sender.config")) {
+        cfg->load(SYSCONFDIR "/sender.config");
+    }
+    g_info.username = cfg->get("username", "stuff-sender-bot");
+    g_info.url = cfg->get("url", "");
+    if (g_info.url.empty()) {
+        std::cerr << "No url configured" << std::endl;
+        return EXIT_FAILURE;
+    }
+    g_info.icon_url = cfg->get("icon_url", "");
+    g_info.icon_emoji = cfg->get("icon_emoji", "");
+    auto const& listener = cfg->get("listener", "");
+    if (listener.empty()) {
+        std::cerr << "No listener configured" << std::endl;
+        return EXIT_FAILURE;
+    }
+    cfg.reset();
+
+    int fd[2];
+    if (pipe(fd)) {
+        std::cerr << "Unable to create pipe: " << strerror(errno) << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    auto pid = fork();
+    if (pid < 0) {
+        std::cerr << "Unable to fork: " << strerror(errno) << std::endl;
+        close(fd[0]);
+        close(fd[1]);
+        return EXIT_FAILURE;
+    }
+    if (pid == 0) {
+        close(fd[0]);
+        setpgrp();
+        if (listener.find(':') != std::string::npos ||
+            listener.front() == '/') {
+            chdir("/");
+        }
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
+        int ret = run(listener, fd[1]);
+        while (true) {
+            if (write(fd[1], "", 1) != -1 || errno != EINTR) break;
+        }
+        close(fd[1]);
+        _exit(ret);
+    } else {
+        close(fd[1]);
+        char c;
+        while (true) {
+            auto ret = read(fd[0], &c, 1);
+            if (ret == 1) {
+                break;
+            }
+            if (ret < 0 && errno == EINTR) {
+                continue;
+            }
+            c = '1';
+            break;
+        }
+        if (c) {
+            std::cerr << "Failed to start, see syslog for details" << std::endl;
+            close(fd[0]);
+            return EXIT_FAILURE;
+        }
+        close(fd[0]);
+        return EXIT_SUCCESS;
+    }
 }

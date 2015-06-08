@@ -5,5 +5,7 @@
 /libcgi.la
 /libdb.la
 /libutil.la
+/libsender_client.la
 /event
 /sender
+/test-sender
