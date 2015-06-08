@@ -7,7 +7,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <csignal>
-#include <fcntl.h>
 #include <iostream>
 #include <netdb.h>
 #include <time.h>
@@ -18,6 +17,7 @@
 
 #include "config.hh"
 #include "json.hh"
+#include "sockutils.hh"
 
 /*
 {
@@ -326,7 +326,7 @@ int main() {
         goto error;
     }
 
-    make_nonblock(sock_);
+    make_nonblocking(sock_);
 
     {
         int value = 1;
@@ -413,12 +413,15 @@ int main() {
                 std::cerr << "Accept failed: " << strerror(errno);
                 goto error;
             }
-            make_nonblock(sock);
-            if (clients.size() == MAX_CLIENTS) {
-                // Remove oldest
-                clients.erase(clients.begin());
+            if (!make_nonblocking(sock)) {
+                close(sock);
+            } else {
+                if (clients.size() == MAX_CLIENTS) {
+                    // Remove oldest
+                    clients.erase(clients.begin());
+                }
+                clients.emplace_back(sock);
             }
-            clients.emplace_back(sock);
         }
     }
 

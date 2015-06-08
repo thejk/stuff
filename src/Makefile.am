@@ -28,5 +28,5 @@ libdb_la_CPPFLAGS = $(AM_CPPFLAGS) @SQLITE3_CFLAGS@
 libdb_la_LIBADD = @SQLITE3_LIBS@
 
 libutil_la_SOURCES = common.hh fsutils.cc fsutils.hh config.cc config.hh \
-					 strutils.hh strutils.cc
+					 strutils.hh strutils.cc sockutils.hh sockutils.cc
 

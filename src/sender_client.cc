@@ -12,6 +12,7 @@
 
 #include "config.hh"
 #include "sender_client.hh"
+#include "sockutils.hh"
 
 namespace stuff {
 
@@ -183,19 +184,10 @@ private:
             }
         }
 
-        int flags = fcntl(sock_, F_GETFL, 0);
-        if (flags < 0) {
+        if (!make_nonblocking(sock_)) {
             close(sock_);
             sock_ = -1;
             return false;
-        }
-        if (!(flags & O_NONBLOCK)) {
-            flags |= O_NONBLOCK;
-            if (fcntl(sock_, F_SETFL, flags) < 0) {
-                close(sock_);
-                sock_ = -1;
-                return false;
-            }
         }
 
         return true;
