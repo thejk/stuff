@@ -1,0 +1,10 @@
+stuff, a collection of stuff for slack integration
+
+Currently there is only event, a /event command integration that can be used
+to keep track of events in slack channels.
+
+Uses CGI script "event" (with optional FastCGI integration) to handle incoming
+slack command integrations. Needs SQLite.
+
+Uses optional sender daemon to send messages back to channels using slack
+webhook integration. Needs cURL.
