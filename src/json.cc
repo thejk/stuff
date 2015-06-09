@@ -175,7 +175,7 @@ public:
         return true;
     }
 
-    std::string str() const {
+    std::string str() const override {
         std::ostringstream ss;
         write(ss, this);
         return ss.str();
@@ -225,7 +225,7 @@ public:
         }
     }
 
-    void erase(size_t index) {
+    void erase(size_t index) override {
         data_.erase(data_.begin() + index);
     }
 
@@ -276,7 +276,7 @@ public:
         return true;
     }
 
-    std::string str() const {
+    std::string str() const override {
         std::ostringstream ss;
         write(ss, this);
         return ss.str();
