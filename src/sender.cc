@@ -217,7 +217,7 @@ void queue_message(const std::string& channel, const std::string& message) {
     g_info.requests.emplace_back(g_info.multi, g_info.url, obj->str());
 }
 
-int run(const std::string& listener, int fd) {
+int run(const std::string& listener, int* fd) {
     openlog("sender", LOG_PID, LOG_DAEMON);
 
     if (curl_global_init(CURL_GLOBAL_ALL)) {
@@ -314,9 +314,10 @@ int run(const std::string& listener, int fd) {
     signal(SIGTERM, quit);
 
     while (true) {
-        if (write(fd, "", 1) != -1 || errno != EINTR) break;
+        if (write(*fd, "", 1) != -1 || errno != EINTR) break;
     }
-    close(fd);
+    close(*fd);
+    *fd = -1;
 
     while (!g_quit) {
         curl_multi_perform(g_info.multi, &still_running);
@@ -458,11 +459,13 @@ int main() {
         close(STDIN_FILENO);
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
-        int ret = run(listener, fd[1]);
-        while (true) {
-            if (write(fd[1], "", 1) != -1 || errno != EINTR) break;
+        int ret = run(listener, fd + 1);
+        if (fd[1] != -1) {
+            while (true) {
+                if (write(fd[1], "", 1) != -1 || errno != EINTR) break;
+            }
+            close(fd[1]);
         }
-        close(fd[1]);
         _exit(ret);
     } else {
         close(fd[1]);
