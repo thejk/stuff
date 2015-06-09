@@ -221,10 +221,13 @@ private:
 };
 
 std::shared_ptr<DB::Snapshot> open(std::shared_ptr<DB> db) {
+    time_t now = time(nullptr);
     std::vector<DB::OrderBy> order_by;
     order_by.push_back(DB::OrderBy("start"));
     order_by.push_back(DB::OrderBy("name"));
-    return db->select(kEventTable, DB::Condition(), order_by);
+    return db->select(kEventTable, DB::Condition("start",
+                                                 DB::Condition::GREATER_EQUAL,
+                                                 now), order_by);
 }
 
 }  // namespace
