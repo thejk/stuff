@@ -227,7 +227,8 @@ std::shared_ptr<DB::Snapshot> open(std::shared_ptr<DB> db) {
     order_by.push_back(DB::OrderBy("name"));
     return db->select(kEventTable, DB::Condition("start",
                                                  DB::Condition::GREATER_EQUAL,
-                                                 now), order_by);
+                                                 static_cast<int64_t>(now)),
+                      order_by);
 }
 
 }  // namespace
