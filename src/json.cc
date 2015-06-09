@@ -304,10 +304,30 @@ std::ostream& quoted(std::ostream& os, const std::string& str) {
     os << '"';
     size_t last = 0;
     for (size_t i = 0; i < str.size(); ++i) {
-        if (str[i] == '"' || str[i] == '\\') {
+        switch (str[i]) {
+        case '"':
+        case '\\':
             os << str.substr(last, i - last);
             os << '\\';
             last = i;
+            break;
+        case '\n':
+        case '\r':
+        case '\t':
+            os << str.substr(last, i - last);
+            switch (str[i]) {
+            case '\n':
+                os << "\\n";
+                break;
+            case '\r':
+                os << "\\r";
+                break;
+            case '\t':
+                os << "\\t";
+                break;
+            }
+            last = i + 1;
+            break;
         }
     }
     os << str.substr(last);
