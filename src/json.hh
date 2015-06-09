@@ -12,6 +12,7 @@ class JsonObject {
 public:
     virtual ~JsonObject() {}
     virtual void put(const std::string& name, const std::string& value) = 0;
+    void put(const std::string& name, const char* value);
     virtual void put(const std::string& name, double value) = 0;
     virtual void put(const std::string& name, int64_t value) = 0;
     virtual void put(const std::string& name, bool value) = 0;
@@ -21,11 +22,16 @@ public:
     virtual void put(const std::string& name,
                      std::shared_ptr<JsonArray> arr) = 0;
 
+    virtual bool erase(const std::string& name) = 0;
+    virtual void clear() = 0;
+
     virtual bool contains(const std::string& name) const = 0;
     virtual bool is_null(const std::string& name) const = 0;
     virtual const std::string& get(const std::string& name,
                                    const std::string& fallback
                                    = std::string()) const = 0;
+    virtual const char* get(const std::string& name,
+                            const char* fallback) const = 0;
     virtual double get(const std::string& name,
                        double fallback = 0.0) const = 0;
     virtual int64_t get(const std::string& name,
@@ -54,6 +60,7 @@ public:
     virtual void resize(size_t size) = 0;
 
     virtual void put(size_t index, const std::string& value) = 0;
+    void put(size_t index, const char* value);
     virtual void put(size_t index, double value) = 0;
     virtual void put(size_t index, int64_t value) = 0;
     virtual void put(size_t index, bool value) = 0;
@@ -63,7 +70,11 @@ public:
     virtual void put(size_t index,
                      std::shared_ptr<JsonArray> arr) = 0;
 
+    virtual void erase(size_t index) = 0;
+    void clear();
+
     void add(const std::string& value);
+    void add(const char* value);
     void add(double value);
     void add(int64_t value);
     void add(bool value);
@@ -75,6 +86,7 @@ public:
     virtual const std::string& get(size_t index,
                                    const std::string& fallback
                                    = std::string()) const = 0;
+    virtual const char* get(size_t index, const char* fallback) const = 0;
     virtual double get(size_t index,
                        double fallback = 0.0) const = 0;
     virtual int64_t get(size_t index,

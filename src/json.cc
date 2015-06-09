@@ -108,6 +108,14 @@ public:
         }
     }
 
+    bool erase(const std::string& name) override {
+        return data_.erase(name);
+    }
+
+    void clear() override {
+        data_.clear();
+    }
+
     bool contains(const std::string& name) const override {
         return data_.find(name) != data_.end();
     }
@@ -121,6 +129,14 @@ public:
         if (it == data_.end() || !it->second) return fallback;
         return it->second->type == JsonType::STRING ?
             static_cast<StringJsonValue*>(it->second.get())->str : fallback;
+    }
+    const char* get(const std::string& name,
+                    const char* fallback) const override {
+        auto it = data_.find(name);
+        if (it == data_.end() || !it->second) return fallback;
+        return it->second->type == JsonType::STRING ?
+            static_cast<StringJsonValue*>(it->second.get())->str.c_str() :
+            fallback;
     }
     double get(const std::string& name, double fallback) const override {
         auto it = data_.find(name);
@@ -209,6 +225,10 @@ public:
         }
     }
 
+    void erase(size_t index) {
+        data_.erase(data_.begin() + index);
+    }
+
     bool is_null(size_t index) const override {
         return index < data_.size() && !data_[index];
     }
@@ -217,6 +237,12 @@ public:
         if (index >= data_.size() || !data_[index]) return fallback;
         return data_[index]->type == JsonType::STRING ?
             static_cast<StringJsonValue*>(data_[index].get())->str : fallback;
+    }
+    const char* get(size_t index, const char* fallback) const override {
+        if (index >= data_.size() || !data_[index]) return fallback;
+        return data_[index]->type == JsonType::STRING ?
+            static_cast<StringJsonValue*>(data_[index].get())->str.c_str() :
+            fallback;
     }
     double get(size_t index, double fallback) const override {
         if (index >= data_.size() || !data_[index]) return fallback;
@@ -352,7 +378,27 @@ std::shared_ptr<JsonObject> JsonObject::create() {
     return std::make_shared<JsonObjectImpl>();
 }
 
+void JsonObject::put(const std::string& name, const char* value) {
+    if (value) {
+        put(name, std::string(value));
+    } else {
+        put(name, nullptr);
+    }
+}
+
+void JsonArray::put(size_t index, const char* value) {
+    if (value) {
+        put(index, std::string(value));
+    } else {
+        put(index, nullptr);
+    }
+}
+
 void JsonArray::add(const std::string& value) {
+    put(size(), value);
+}
+
+void JsonArray::add(const char* value) {
     put(size(), value);
 }
 
@@ -378,6 +424,10 @@ void JsonArray::add(std::shared_ptr<JsonObject> obj) {
 
 void JsonArray::add(std::shared_ptr<JsonArray> arr) {
     put(size(), arr);
+}
+
+void JsonArray::clear() {
+    resize(0);
 }
 
 // static
