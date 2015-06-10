@@ -110,7 +110,7 @@ void signal_event(const std::string& channel,
         ss << event->text() << std::endl;
     }
     ss << std::endl;
-    ss << "Use /going to join the event" << std::endl;
+    ss << "Use /event going to join the event" << std::endl;
     signal_channel(channel, ss.str());
 }
 
