@@ -426,17 +426,17 @@ bool going(const std::string& channel,
     std::string note, user = user_name;
     auto db = open(channel);
     if (!db) return true;
+    if (!args.empty() && args.front() == "user") {
+        if (args.size() == 1) {
+            Http::response(200, "Expected username after 'user'");
+            return true;
+        }
+        user = args[1];
+        args.erase(args.begin(), args.begin() + 2);
+    }
     if (args.empty()) {
         event = Event::next(db);
     } else {
-        if (args.front() == "user") {
-            if (args.size() == 1) {
-                Http::response(200, "Expected username after 'user'");
-                return true;
-            }
-            user = args[1];
-            args.erase(args.begin(), args.begin() + 2);
-        }
         if (args.size() == 1) {
             char* end = nullptr;
             errno = 0;
@@ -486,10 +486,10 @@ bool going(const std::string& channel,
             }
             if (going) {
                 signal_channel(channel, user + " will be attending " +
-                               event->name());
+                               event->name() + extra);
             } else {
                 signal_channel(channel, user + " will not be attending " +
-                               event->name());
+                               event->name() + extra);
             }
         }
     } else {
