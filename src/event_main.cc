@@ -423,32 +423,42 @@ bool going(const std::string& channel,
     }
     std::unique_ptr<Event> event;
     std::vector<unsigned long> indexes;
-    std::string note;
+    std::string note, user = user_name;
     auto db = open(channel);
     if (!db) return true;
     if (args.empty()) {
         event = Event::next(db);
-    } else if (args.size() == 1) {
-        char* end = nullptr;
-        errno = 0;
-        auto tmp = strtoul(args.front().c_str(), &end, 10);
-        if (errno == 0 && end && !*end) {
-            indexes.push_back(tmp);
-        }
-
-        if (indexes.empty()) {
-            event = Event::next(db);
-            note = args.front();
-        }
     } else {
-        auto it = args.begin() + 1;
-        if (!append_indexes(args.begin(), it, &indexes)) {
-            return true;
+        if (args.front() == "user") {
+            if (args.size() == 1) {
+                Http::response(200, "Expected username after 'user'");
+                return true;
+            }
+            user = args[1];
+            args.erase(args.begin(), args.begin() + 2);
         }
-        note = *it;
-        for (++it; it != args.end(); ++it) {
-            note.push_back(' ');
-            note.append(*it);
+        if (args.size() == 1) {
+            char* end = nullptr;
+            errno = 0;
+            auto tmp = strtoul(args.front().c_str(), &end, 10);
+            if (errno == 0 && end && !*end) {
+                indexes.push_back(tmp);
+            }
+
+            if (indexes.empty()) {
+                event = Event::next(db);
+                note = args.front();
+            }
+        } else {
+            auto it = args.begin() + 1;
+            if (!append_indexes(args.begin(), it, &indexes)) {
+                return true;
+            }
+            note = *it;
+            for (++it; it != args.end(); ++it) {
+                note.push_back(' ');
+                note.append(*it);
+            }
         }
     }
     if (!event) {
@@ -465,16 +475,20 @@ bool going(const std::string& channel,
         }
         event.swap(events[indexes.front()]);
     }
-    event->update_going(user_name, going, note);
+    event->update_going(user, going, note);
     if (event->store()) {
         Http::response(200, "Your wish have been recorded, if not granted");
         auto next_event = Event::next(db);
         if (next_event->id() == event->id()) {
+            std::string extra;
+            if (user != user_name) {
+                extra = " says " + user_name;
+            }
             if (going) {
-                signal_channel(channel, user_name + " will be attending " +
+                signal_channel(channel, user + " will be attending " +
                                event->name());
             } else {
-                signal_channel(channel, user_name + " will not be attending " +
+                signal_channel(channel, user + " will not be attending " +
                                event->name());
             }
         }
@@ -509,13 +523,17 @@ bool help(std::vector<std::string>& args) {
         ss << "Show one or more events given by index"
            << " (default is next event)";
     } else if (args.front() == "going") {
-        ss << "Usage: going [INDEX] [NOTE]" << std::endl;
+        ss << "Usage: going [user USER] [INDEX] [NOTE]" << std::endl;
         ss << "Join an event specified by index (default is next event)"
            << " and add an optional NOTE";
+        ss << "If USER is specified, you're saying that USER is joining"
+           << " instead of yourself - use with caution";
     } else if (args.front() == "!going") {
-        ss << "Usage: !going [INDEX] [NOTE]" << std::endl;
+        ss << "Usage: !going [user USER] [INDEX] [NOTE]" << std::endl;
         ss << "Un-join an event specified by index (default is next event)"
            << " and add an optional NOTE";
+        ss << "If USER is specified, you're saying that USER is not going"
+           << " instead of yourself - use with caution";
     } else {
         ss << "Unknown command: " << args.front();
     }
