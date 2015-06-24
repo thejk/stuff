@@ -525,13 +525,13 @@ bool help(std::vector<std::string>& args) {
     } else if (args.front() == "going") {
         ss << "Usage: going [user USER] [INDEX] [NOTE]" << std::endl;
         ss << "Join an event specified by index (default is next event)"
-           << " and add an optional NOTE";
+           << " and add an optional NOTE" << std::endl;
         ss << "If USER is specified, you're saying that USER is joining"
            << " instead of yourself - use with caution";
     } else if (args.front() == "!going") {
         ss << "Usage: !going [user USER] [INDEX] [NOTE]" << std::endl;
         ss << "Un-join an event specified by index (default is next event)"
-           << " and add an optional NOTE";
+           << " and add an optional NOTE" << std::endl;
         ss << "If USER is specified, you're saying that USER is not going"
            << " instead of yourself - use with caution";
     } else {
