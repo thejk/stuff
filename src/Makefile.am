@@ -3,13 +3,16 @@ MAINTAINERCLEANFILES = Makefile.in
 AM_CPPFLAGS = @DEFINES@ -DLOCALSTATEDIR='"@localstatedir@/stuff"' \
 			  -DSYSCONFDIR='"@sysconfdir@/stuff"'
 
-bin_PROGRAMS = event sender
+bin_PROGRAMS = event sender page
 noinst_PROGRAMS = test-sender
 noinst_LTLIBRARIES = libdb.la libcgi.la libutil.la libsender_client.la \
 					 libjson.la libevent.la
 
 event_SOURCES = event_main.cc common.hh cgi.hh
 event_LDADD = libcgi.la libevent.la
+
+page_SOURCES = page_main.cc common.hh cgi.hh
+page_LDADD = libcgi.la libevent.la
 
 sender_SOURCES = common.hh sender.cc
 sender_CPPFLAGS = $(AM_CPPFLAGS) @CURL_CFLAGS@
