@@ -29,7 +29,8 @@ libcgi_la_SOURCES = cgi.hh common.hh cgi.cc \
 					header_parser.hh header_parser.cc \
 					args.hh args.cc \
 					http.hh http.cc \
-				    multipart_formdata_parser.hh multipart_formdata_parser.cc
+					auth.hh auth.cc \
+					multipart_formdata_parser.hh multipart_formdata_parser.cc
 libcgi_la_CPPFLAGS = $(AM_CPPFLAGS) @FASTCGI_CFLAGS@
 libcgi_la_LIBADD = @FASTCGI_LIBS@ libutil.la
 
@@ -38,7 +39,8 @@ libdb_la_CPPFLAGS = $(AM_CPPFLAGS) @SQLITE3_CFLAGS@
 libdb_la_LIBADD = @SQLITE3_LIBS@
 
 libutil_la_SOURCES = common.hh fsutils.cc fsutils.hh config.cc config.hh \
-					 strutils.hh strutils.cc sockutils.hh sockutils.cc
+					 strutils.hh strutils.cc sockutils.hh sockutils.cc \
+					 base64.hh base64.cc
 
 libsender_client_la_SOURCES = common.h sender_client.cc sender_client.hh
 libsender_client_la_LIBADD = libutil.la

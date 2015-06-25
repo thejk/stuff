@@ -27,8 +27,11 @@ public:
     // Will first try post_data and fallback to query_data
     void get_data(std::map<std::string,std::string>* data);
     virtual std::string request_path() = 0;
+    virtual std::string request_uri() = 0;
+    virtual std::string remote_addr() = 0;
     virtual request_type request_type() = 0;
     virtual std::string content_type() = 0;
+    virtual std::string http_auth() = 0;
 
     static int run(std::function<bool(CGI*)> handle_request);
 

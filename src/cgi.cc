@@ -63,6 +63,21 @@ public:
         return path ? path : "";
     }
 
+    std::string request_uri() override {
+        auto path = getparam("REQUEST_URI");
+        return path ? path : "";
+    }
+
+    std::string remote_addr() override {
+        auto path = getparam("REMOTE_ADDR");
+        return path ? path : "";
+    }
+
+    std::string http_auth() override {
+        auto auth = getparam("HTTP_AUTHORIZATION");
+        return auth ? auth : "";
+    }
+
     std::string content_type() override {
         auto ct = getparam("CONTENT_TYPE");
         if (!ct) return "";
