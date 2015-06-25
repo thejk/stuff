@@ -6,10 +6,10 @@ AM_CPPFLAGS = @DEFINES@ -DLOCALSTATEDIR='"@localstatedir@/stuff"' \
 bin_PROGRAMS = event sender
 noinst_PROGRAMS = test-sender
 noinst_LTLIBRARIES = libdb.la libcgi.la libutil.la libsender_client.la \
-					 libjson.la
+					 libjson.la libevent.la
 
-event_SOURCES = event.cc event.hh event_main.cc common.hh cgi.hh db.hh
-event_LDADD = libdb.la libcgi.la libsender_client.la
+event_SOURCES = event_main.cc common.hh cgi.hh
+event_LDADD = libcgi.la libevent.la
 
 sender_SOURCES = common.hh sender.cc
 sender_CPPFLAGS = $(AM_CPPFLAGS) @CURL_CFLAGS@
@@ -17,6 +17,10 @@ sender_LDADD = libjson.la libutil.la @CURL_LIBS@
 
 test_sender_SOURCES = common.hh test_sender.cc sender_client.hh
 test_sender_LDADD = libsender_client.la
+
+libevent_la_SOURCES = event.cc event.hh event_utils.cc event_utils.hh \
+					  common.hh db.hh sender_client.hh
+libevent_la_LIBADD = libdb.la libsender_client.la
 
 libjson_la_SOURCES = json.hh json.cc common.hh
 

@@ -4,9 +4,11 @@
 /stamp-h1
 /libcgi.la
 /libdb.la
+/libevent.la
 /libjson.la
 /libutil.la
 /libsender_client.la
 /event
+/page
 /sender
 /test-sender

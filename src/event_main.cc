@@ -1,7 +1,6 @@
 #include "common.hh"
 
 #include <algorithm>
-#include <functional>
 #include <iostream>
 #include <memory>
 #include <set>
@@ -14,10 +13,9 @@
 #include "config.hh"
 #include "db.hh"
 #include "event.hh"
-#include "fsutils.hh"
+#include "event_utils.hh"
 #include "http.hh"
 #include "sender_client.hh"
-#include "sqlite3_db.hh"
 
     /*
 token=gIkuvaNzQIHg97ATvDxqgjtO
@@ -38,80 +36,10 @@ namespace {
 std::unique_ptr<Config> g_cfg;
 std::unique_ptr<SenderClient> g_sender;
 
-std::shared_ptr<DB> open(const std::string& channel) {
-    std::string tmp = channel;
-    for (auto it = tmp.begin(); it != tmp.end(); ++it) {
-        if (!((*it >= 'a' && *it <= 'z') ||
-              (*it >= 'A' && *it <= 'Z') ||
-              (*it >= '0' && *it <= '9') ||
-              *it == '-' || *it == '_' || *it == '.')) {
-            *it = '.';
-        }
-    }
-    std::string path = g_cfg->get("db_path", LOCALSTATEDIR);
-    if (path.empty()) path = ".";
-    if (!mkdir_p(path)) {
-        Http::response(200, "Unable to create database directory");
-        return nullptr;
-    }
-    auto db = SQLite3::open(path + "/" + tmp + ".db");
-    if (!db || db->bad()) {
-        Http::response(200, "Unable to open database");
-        db.reset();
-    } else if (!Event::setup(db.get())) {
-        Http::response(200, "Unable to setup database");
-        db.reset();
-    }
-    return std::move(db);
-}
-
 bool parse(const std::string& text, std::vector<std::string>* args) {
     if (Args::parse(text, args)) return true;
     Http::response(200, "Invalid parameter format");
     return false;
-}
-
-const double ONE_DAY_IN_SEC = 24.0 * 60.0 * 60.0;
-const double ONE_WEEK_IN_SEC = ONE_DAY_IN_SEC * 7.0;
-// It's OK that we ignore leap years here
-const double ONE_YEAR_IN_SEC = 365 * ONE_DAY_IN_SEC;
-
-std::string format_date(time_t date) {
-    time_t now = time(NULL);
-    struct tm _t;
-    struct tm* t = localtime_r(&date, &_t);
-    double diff = difftime(date, now);
-    char tmp[100];
-    if (diff <= ONE_DAY_IN_SEC) {
-        // Same day, just show time
-        strftime(tmp, sizeof(tmp), "%H:%M", t);
-    } else if (diff <= ONE_WEEK_IN_SEC) {
-        // Inside a week, show day and time
-        strftime(tmp, sizeof(tmp), "%A %H:%M", t);
-    } else if (diff <= ONE_YEAR_IN_SEC / 2.0) {
-        // Inside a year, show date, day and time
-        strftime(tmp, sizeof(tmp), "%A %d/%m %H:%M", t);
-    } else {
-        strftime(tmp, sizeof(tmp), "%Y-%m-%d %H:%M", t);
-    }
-    return tmp;
-}
-
-void signal_channel(const std::string& channel, const std::string& str) {
-    if (!g_sender) return;
-    g_sender->send(channel, str);
-}
-
-void signal_event(const std::string& channel,
-                  const std::unique_ptr<Event>& event) {
-    std::ostringstream ss;
-    ss << event->name() << " @ " << format_date(event->start()) << std::endl;
-    if (!event->text().empty()) {
-        ss << event->text() << std::endl;
-    }
-    ss << std::endl;
-    ss << "Use /event going to join the event" << std::endl;
-    signal_channel(channel, ss.str());
 }
 
 bool parse_time(const std::string& value, time_t* date) {
@@ -129,7 +57,7 @@ bool parse_time(const std::string& value, time_t* date) {
         if (days <= 0) {
             days += 7;
         }
-        time_t tmp = mktime(&_tmp) + days * ONE_DAY_IN_SEC;
+        time_t tmp = mktime(&_tmp) + days * EventUtils::ONE_DAY_IN_SEC;
         localtime_r(&tmp, &_tmp);
         goto done;
     }
@@ -148,7 +76,7 @@ bool parse_time(const std::string& value, time_t* date) {
     return true;
 }
 
-bool create(const std::string& channel,
+bool create(EventUtils* utils,
             std::map<std::string, std::string>& data,
             std::vector<std::string>& args) {
     if (args.size() < 2) {
@@ -171,9 +99,8 @@ bool create(const std::string& channel,
         text.append(args.front());
         args.erase(args.begin());
     }
-    auto db = open(channel);
-    if (!db) return true;
-    auto event = Event::create(db, name, start);
+    auto event = utils->create(name, start);
+    if (!utils->good()) return true;
     if (!event) {
         Http::response(200, "Unable to create event");
         return true;
@@ -192,10 +119,7 @@ bool create(const std::string& channel,
         return true;
     }
     Http::response(200, "Event created");
-    auto next_event = Event::next(db);
-    if (next_event->id() == event->id()) {
-        signal_event(channel, next_event);
-    }
+    utils->created(event.get());
     return true;
 }
 
@@ -215,7 +139,7 @@ bool append_indexes(Iterator begin, Iterator end,
     return true;
 }
 
-bool cancel(const std::string& channel,
+bool cancel(EventUtils* utils,
             std::map<std::string, std::string>& data,
             std::vector<std::string>& args) {
     std::vector<unsigned long> indexes;
@@ -229,9 +153,8 @@ bool cancel(const std::string& channel,
                   std::greater<unsigned long>());
         std::unique(indexes.begin(), indexes.end());
     }
-    auto db = open(channel);
-    if (!db) return true;
-    auto events = Event::all(db);
+    auto events = utils->all();
+    if (!utils->good()) return true;
     if (indexes.front() >= events.size()) {
         if (events.empty()) {
             Http::response(200, "There are no events");
@@ -244,28 +167,18 @@ bool cancel(const std::string& channel,
         }
         return true;
     }
-    std::string signal;
     for (const auto& index : indexes) {
-        if (index == 0) {
-            std::ostringstream ss;
-            ss << "Event canceled: " << events[index]->name() << " @ "
-               << format_date(events[index]->start());
-            signal = ss.str();
-        }
-        events[index]->remove();
+        utils->cancel(events[index].get(), index);
     }
     if (indexes.size() > 1) {
         Http::response(200, "Events removed");
     } else {
         Http::response(200, "Event removed");
     }
-    if (!signal.empty()) {
-        signal_channel(channel, signal);
-    }
     return true;
 }
 
-bool update(const std::string& channel,
+bool update(EventUtils* utils,
             std::map<std::string, std::string>& data,
             std::vector<std::string>& args) {
     std::set<std::string> update;
@@ -276,32 +189,34 @@ bool update(const std::string& channel,
         Http::response(200, "Usage: update [INDEX] [name NAME] [start START] [text TEXT]");
         return true;
     }
-    auto db = open(channel);
-    if (!db) return true;
     std::unique_ptr<Event> event;
+    int64_t first_event;
     auto it = args.begin();
     if (update.count(*it) == 0) {
         std::vector<unsigned long> indexes;
         if (!append_indexes(args.begin(), ++it, &indexes)) {
             return true;
         }
-        auto events = Event::all(db);
+        auto events = utils->all();
+        if (!utils->good()) return true;
         if (indexes.front() >= events.size()) {
             std::ostringstream ss;
             ss << "No such event: " << indexes.front() << std::endl;
             Http::response(200, ss.str());
             return true;
         }
+        first_event = events.front()->id();
         event.swap(events[indexes.front()]);
         ++it;
     } else {
-        event = Event::next(db);
+        event = utils->next();
+        if (!utils->good()) return true;
         if (!event) {
             Http::response(200, "No event to update");
             return true;
         }
+        first_event = event->id();
     }
-    auto first_event = Event::next(db)->id();
     while (it != args.end()) {
         if (*it == "name") {
             if (++it == args.end()) {
@@ -344,18 +259,14 @@ bool update(const std::string& channel,
     }
     if (event->store()) {
         Http::response(200, "Event updated");
-        auto next_event = Event::next(db);
-        if (next_event->id() != first_event ||
-            next_event->id() == event->id()) {
-            signal_event(channel, next_event);
-        }
+        utils->updated(event.get(), first_event);
     } else {
         Http::response(200, "Update failed");
     }
     return true;
 }
 
-bool show(const std::string& channel,
+bool show(EventUtils* utils,
           std::map<std::string, std::string>& data,
           std::vector<std::string>& args) {
     std::vector<unsigned long> indexes;
@@ -366,9 +277,8 @@ bool show(const std::string& channel,
             return true;
         }
     }
-    auto db = open(channel);
-    if (!db) return true;
-    auto events = Event::all(db);
+    auto events = utils->all();
+    if (!utils->good()) return true;
     std::ostringstream ss;
     for (const auto& index : indexes) {
         if (indexes.size() > 1) {
@@ -382,7 +292,7 @@ bool show(const std::string& channel,
             }
         } else {
             ss << events[index]->name() << " @ "
-               << format_date(events[index]->start()) << std::endl;
+               << EventUtils::format_date(events[index]->start()) << std::endl;
             const auto& text = events[index]->text();
             if (!text.empty()) {
                 ss << text << std::endl;
@@ -412,7 +322,7 @@ bool show(const std::string& channel,
     return true;
 }
 
-bool going(const std::string& channel,
+bool going(EventUtils* utils,
            std::map<std::string, std::string>& data,
            std::vector<std::string>& args,
            bool going) {
@@ -424,8 +334,6 @@ bool going(const std::string& channel,
     std::unique_ptr<Event> event;
     std::vector<unsigned long> indexes;
     std::string note, user = user_name;
-    auto db = open(channel);
-    if (!db) return true;
     if (!args.empty() && args.front() == "user") {
         if (args.size() == 1) {
             Http::response(200, "Expected username after 'user'");
@@ -435,7 +343,8 @@ bool going(const std::string& channel,
         args.erase(args.begin(), args.begin() + 2);
     }
     if (args.empty()) {
-        event = Event::next(db);
+        event = utils->next();
+        if (!utils->good()) return true;
     } else {
         if (args.size() == 1) {
             char* end = nullptr;
@@ -446,7 +355,8 @@ bool going(const std::string& channel,
             }
 
             if (indexes.empty()) {
-                event = Event::next(db);
+                event = utils->next();
+                if (!utils->good()) return true;
                 note = args.front();
             }
         } else {
@@ -462,7 +372,8 @@ bool going(const std::string& channel,
         }
     }
     if (!event) {
-        auto events = Event::all(db);
+        auto events = utils->all();
+        if (!utils->good()) return true;
         if (events.empty()) {
             Http::response(200, "There are no events to attend");
             return true;
@@ -478,20 +389,7 @@ bool going(const std::string& channel,
     event->update_going(user, going, note);
     if (event->store()) {
         Http::response(200, "Your wish have been recorded, if not granted");
-        auto next_event = Event::next(db);
-        if (next_event->id() == event->id()) {
-            std::string extra;
-            if (user != user_name) {
-                extra = " says " + user_name;
-            }
-            if (going) {
-                signal_channel(channel, user + " will be attending " +
-                               event->name() + extra);
-            } else {
-                signal_channel(channel, user + " will not be attending " +
-                               event->name() + extra);
-            }
-        }
+        utils->going(event.get(), going, user, user_name);
     } else {
         Http::response(200, "Event store failed");
     }
@@ -541,6 +439,10 @@ bool help(std::vector<std::string>& args) {
     return true;
 }
 
+void error_response(const std::string& message) {
+    Http::response(200, message);
+}
+
 bool handle_request(CGI* cgi) {
     switch (cgi->request_type()) {
     case CGI::GET:
@@ -575,23 +477,25 @@ bool handle_request(CGI* cgi) {
     }
     auto command = args.front();
     args.erase(args.begin());
+    auto utils = EventUtils::create(channel, error_response, g_cfg.get(),
+                                    g_sender.get());
     if (command == "create") {
-        return create(channel, data, args);
+        return create(utils.get(), data, args);
     }
     if (command == "cancel") {
-        return cancel(channel, data, args);
+        return cancel(utils.get(), data, args);
     }
     if (command == "update") {
-        return update(channel, data, args);
+        return update(utils.get(), data, args);
     }
     if (command == "show") {
-        return show(channel, data, args);
+        return show(utils.get(), data, args);
     }
     if (command == "going") {
-        return going(channel, data, args, true);
+        return going(utils.get(), data, args, true);
     }
     if (command == "!going") {
-        return going(channel, data, args, false);
+        return going(utils.get(), data, args, false);
     }
     if (command == "help") {
         return help(args);
