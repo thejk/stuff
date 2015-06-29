@@ -7,7 +7,6 @@
 #include <string>
 
 #include "auth.hh"
-// #include "cookies.hh"
 #include "cgi.hh"
 #include "config.hh"
 #include "db.hh"
@@ -144,6 +143,9 @@ bool show(CGI* cgi, EventUtils* utils, const std::string& user) {
     page.write(" @ ");
     page.write_safe(EventUtils::format_date(event->start()));
     page.write("</h1>");
+    page.write("<p>");
+    page.write_safe(event->text());
+    page.write("</p>");
     std::vector<Event::Going> going;
     event->going(&going);
     int8_t state = 0;
