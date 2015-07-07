@@ -32,11 +32,11 @@ Iterator find_boundary(Iterator begin, Iterator end,
             continue;
         }
         ++test;
-        if (static_cast<size_t>(end - test) <= boundary.size()) return end;
+        if (static_cast<size_t>(end - test) <= boundary.size()) break;
         if (boundary.compare(0, std::string::npos,
                              &(*test), boundary.size()) == 0) {
             test += boundary.size();
-            if (test == end) return end;
+            if (test == end) break;
             if (*test == '-') {
                 ++test;
                 if (test == end || *test != '-') continue;
@@ -50,6 +50,7 @@ Iterator find_boundary(Iterator begin, Iterator end,
             }
         }
     }
+    *last = true;
     return end;
 }
 
