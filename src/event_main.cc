@@ -400,7 +400,7 @@ bool help(std::vector<std::string>& args) {
     std::ostringstream ss;
     if (args.empty()) {
         ss << "Usage: help COMMAND" << std::endl;
-        ss << "Known commands: create, update, cancel, show, going, !going";
+        ss << "Known commands: create, update, cancel, show, going, !going, join, part";
     } else if (args.front() == "create") {
         ss << "Usage: create NAME START [TEXT]" << std::endl;
         ss << "Create a new event with the name NAME starting at START with"
@@ -420,18 +420,20 @@ bool help(std::vector<std::string>& args) {
         ss << "Usage: show [INDEX...]" << std::endl;
         ss << "Show one or more events given by index"
            << " (default is next event)";
-    } else if (args.front() == "going") {
+    } else if (args.front() == "going" || args.front() == "join") {
         ss << "Usage: going [user USER] [INDEX] [NOTE]" << std::endl;
         ss << "Join an event specified by index (default is next event)"
            << " and add an optional NOTE" << std::endl;
         ss << "If USER is specified, you're saying that USER is joining"
-           << " instead of yourself - use with caution";
-    } else if (args.front() == "!going") {
+           << " instead of yourself - use with caution" << std::endl;
+        ss << "join is an alias for going";
+    } else if (args.front() == "!going" || args.front() == "part") {
         ss << "Usage: !going [user USER] [INDEX] [NOTE]" << std::endl;
         ss << "Un-join an event specified by index (default is next event)"
            << " and add an optional NOTE" << std::endl;
         ss << "If USER is specified, you're saying that USER is not going"
-           << " instead of yourself - use with caution";
+           << " instead of yourself - use with caution" << std::endl;
+        ss << "part is an alias for !going";
     } else {
         ss << "Unknown command: " << args.front();
     }
@@ -491,10 +493,10 @@ bool handle_request(CGI* cgi) {
     if (command == "show") {
         return show(utils.get(), data, args);
     }
-    if (command == "going") {
+    if (command == "going" || command == "join") {
         return going(utils.get(), data, args, true);
     }
-    if (command == "!going") {
+    if (command == "!going" || command == "part") {
         return going(utils.get(), data, args, false);
     }
     if (command == "help") {
