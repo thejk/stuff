@@ -207,7 +207,6 @@ bool update(EventUtils* utils,
         }
         first_event = events.front()->id();
         event.swap(events[indexes.front()]);
-        ++it;
     } else {
         event = utils->next();
         if (!utils->good()) return true;
