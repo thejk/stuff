@@ -49,13 +49,16 @@ struct ArrayJsonValue : public JsonValue {
 
 struct BasicJsonValue : public JsonValue {
     BasicJsonValue(double d)
-        : JsonValue(JsonType::DOUBLE), data({ .d = d }) {
+        : JsonValue(JsonType::DOUBLE) {
+      data.d = d;
     }
     BasicJsonValue(int64_t i)
-        : JsonValue(JsonType::INT64), data({ .i = i }) {
+        : JsonValue(JsonType::INT64) {
+      data.i = i;
     }
     BasicJsonValue(bool b)
-        : JsonValue(JsonType::BOOL), data({ .b = b }) {
+        : JsonValue(JsonType::BOOL) {
+      data.b = b;
     }
     union {
         double d;
