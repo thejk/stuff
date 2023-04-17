@@ -36,9 +36,11 @@ fastcgi_dep = dependency('fcgi', version: '>= 2.4.2', required: false)
 
 conf_data.set10('HAVE_FASTCGI', fastcgipp_dep.found() and fastcgi_dep.found())
 conf_data.set_quoted('SYSCONFDIR', join_paths(get_option('prefix'),
-                                              get_option('sysconfdir')))
+                                              get_option('sysconfdir'),
+                                              'stuff'))
 conf_data.set_quoted('LOCALSTATEDIR', join_paths(get_option('prefix'),
-                                                 get_option('localstatedir')))
+                                                 get_option('localstatedir'),
+                                                 'stuff'))
 configure_file(output: 'config.h',
                configuration: conf_data)
 
