@@ -273,7 +273,7 @@ std::unique_ptr<SenderClient> SenderClient::create(
         const Config* config, std::shared_ptr<Error> error) {
     std::unique_ptr<SenderClientImpl> ret(new SenderClientImpl(error));
     if (!ret->open(config)) return nullptr;
-    return std::move(ret);
+    return ret;
 }
 
 }  // namespace stuff
