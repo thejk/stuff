@@ -80,7 +80,9 @@ bool create(EventUtils* utils,
             std::map<std::string, std::string>& data,
             std::vector<std::string>& args) {
     if (args.size() < 2) {
-        Http::response(200, "Usage: create NAME START [TEXT]");
+        Http::response(200, "Usage: create NAME START [TEXT]\n"
+                       "> START can be either in YYYY-MM-DD HH:MM format "
+                       "or DAY HH:MM format (for example Wednesday 17:30).\n");
         return true;
     }
     std::string name, text;
