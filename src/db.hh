@@ -1,6 +1,7 @@
 #ifndef DB_HH
 #define DB_HH
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>

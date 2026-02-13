@@ -1,5 +1,7 @@
 #include "common.hh"
 
+#include <cstdint>
+
 #include "query_parser.hh"
 
 namespace stuff {
