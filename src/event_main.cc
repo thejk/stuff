@@ -153,7 +153,8 @@ bool cancel(EventUtils* utils,
         }
         std::sort(indexes.begin(), indexes.end(),
                   std::greater<unsigned long>());
-        std::unique(indexes.begin(), indexes.end());
+        auto last = std::unique(indexes.begin(), indexes.end());
+        indexes.erase(last, indexes.end());
     }
     auto events = utils->all();
     if (!utils->good()) return true;
